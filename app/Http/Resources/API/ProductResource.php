@@ -34,6 +34,7 @@ class ProductResource extends JsonResource
             'subcategory_name' => $this->getTranslation(optional($this->subcategory)->translations, $headerValue, 'name', optional($this->subcategory)->name ?? null) ?? optional($this->subcategory)->name,
             'attchments' => getAttachments($this->getMedia('product_attachment')),
             'attchments_array' => getAttachmentArray($this->getMedia('product_attachment'), null),
+            'has_variants' => $this->variants->where('status', true)->where('stock', '>', 0)->count() > 0,
             'service_type' => $this->service_type,
             'service_request_status' => $this->service_request_status,
             'deleted_at' => $this->deleted_at,

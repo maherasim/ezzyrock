@@ -247,7 +247,7 @@ class DashboardController extends Controller
             ->where('service_type', 'ecommerce')
             ->where('status', 1)
             ->where('service_request_status', 'approve')
-            ->with(['providers', 'category', 'subcategory', 'translations'])
+            ->with(['providers', 'category', 'subcategory', 'translations', 'variants'])
             ->orderByDesc('is_featured')
             ->latest();
 

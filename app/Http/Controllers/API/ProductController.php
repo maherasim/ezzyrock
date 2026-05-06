@@ -6,13 +6,14 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\API\ProductResource;
 
 class ProductController extends Controller
 {
     public function getProductList(Request $request)
     {
         $query = Product::where('service_type', 'ecommerce')
-            ->with(['providers', 'category', 'subcategory', 'translations'])
+            ->with(['providers', 'category', 'subcategory', 'translations', 'variants'])
             ->orderBy('created_at', 'desc');
 
         $category = Category::onlyTrashed()->pluck('id');
@@ -41,26 +42,58 @@ class ProductController extends Controller
         $per_page = $request->get('per_page', config('constant.PER_PAGE_LIMIT', 15));
         $items = $per_page === 'all' ? $query->get() : $query->paginate($per_page);
 
+        if ($per_page === 'all') {
+            return response()->json([
+                'status' => true,
+                'data' => ProductResource::collection($items),
+                'pagination' => null,
+            ]);
+        }
+
         return response()->json([
             'status' => true,
-            'data' => $items,
-            'pagination' => $per_page !== 'all' && method_exists($items, 'total') ? [
+            'data' => ProductResource::collection($items),
+            'pagination' => [
                 'total_items' => $items->total(),
                 'per_page' => $items->perPage(),
                 'currentPage' => $items->currentPage(),
                 'totalPages' => $items->lastPage(),
-            ] : null,
+            ],
         ]);
     }
 
     public function getProductDetail(Request $request)
     {
         $id = $request->product_id ?? $request->id;
-        $product = Product::with(['providers', 'category', 'subcategory', 'translations', 'zones', 'shops'])->find($id);
+        $product = Product::with(['providers', 'category', 'subcategory', 'translations', 'zones', 'shops', 'variants.option.attribute', 'productUnit'])->find($id);
         if (!$product) {
             return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
         }
-        return response()->json(['status' => true, 'data' => $product]);
+
+        $activeVariants = $product->variants
+            ->where('status', true)
+            ->where('stock', '>', 0)
+            ->values()
+            ->map(function ($variant) {
+                return [
+                    'id' => $variant->id,
+                    'product_attribute_option_id' => $variant->product_attribute_option_id,
+                    'option_value' => optional($variant->option)->value,
+                    'attribute_name' => optional(optional($variant->option)->attribute)->name,
+                    'price' => $variant->price,
+                    'price_format' => getPriceFormat($variant->price),
+                    'stock' => $variant->stock,
+                    'max_purchase_qty' => $variant->max_purchase_qty,
+                    'status' => $variant->status,
+                ];
+            });
+
+        return response()->json([
+            'status' => true,
+            'data' => new ProductResource($product),
+            'variants' => $activeVariants,
+            'has_variants' => $activeVariants->count() > 0,
+        ]);
     }
 
     public function productstatus(Request $request)
