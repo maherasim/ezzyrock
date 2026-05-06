@@ -8,7 +8,7 @@ use App\Models\Category;
 use App\Http\Resources\API\CategoryResource;
 use Illuminate\Support\Facades\Artisan;
 
-
+//asim test
 class CategoryController extends Controller
 {
     public function getCategoryList(Request $request)
