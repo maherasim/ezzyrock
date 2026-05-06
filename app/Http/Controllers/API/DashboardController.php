@@ -52,12 +52,13 @@ use App\Http\Resources\API\{
     CountryResource,
     TypeResource,
     ShopResource,
+    ProductResource,
+    PostResource,
 };
 use App\Http\Resources\PromotionalBannerResource;
 use App\Traits\TranslationTrait;
 
 use App\Traits\ZoneTrait;
-use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
@@ -289,7 +290,7 @@ class DashboardController extends Controller
             }
         }
 
-        $product = JsonResource::collection($productQuery->paginate($per_page));
+        $product = ProductResource::collection($productQuery->paginate($per_page));
 
         // Classified posts for landing home block
         $postQuery = Post::query()
@@ -335,7 +336,7 @@ class DashboardController extends Controller
             }
         }
 
-        $post = JsonResource::collection($postQuery->paginate($per_page));
+        $post = PostResource::collection($postQuery->paginate($per_page));
 
         $provider = User::where('user_type', 'provider')->where('status', 1);
 
