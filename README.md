@@ -1,66 +1,117 @@
 # ezzyrock
 
-Handyman
+**Ezzyrock** is a handyman / on-demand services platform built with Laravel. It provides admin and API surfaces for managing categories, services, bookings, providers, payments, subscriptions, and related operational workflows.
 
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400"></a></p>
+**Repository:** [github.com/maherasim/ezzyrock](https://github.com/maherasim/ezzyrock)
 
-<p align="center">
-<a href="https://travis-ci.org/laravel/framework"><img src="https://travis-ci.org/laravel/framework.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## Requirements
 
-## About Laravel
+- **PHP** 8.0 or 8.2+ (see `composer.json` for supported ranges)
+- **Composer** 2.x
+- **Node.js** and **npm** (for Laravel Mix asset builds)
+- **MySQL** (or a database supported by your Laravel configuration)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Tech stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| Area | Notes |
+|------|--------|
+| Framework | Laravel 11 |
+| Auth / API tokens | Laravel Sanctum |
+| Admin & roles | Spatie Laravel Permission |
+| Media uploads | Spatie Laravel Media Library |
+| Tables & exports | Yajra DataTables, Maatwebsite Excel |
+| PDF | DomPDF, mPDF |
+| Payments | Stripe, Razorpay |
+| Notifications | OneSignal channel, Twilio SDK |
+| Maps / geocoding | Google API client, Geocoder |
+| Storage | Local / public; optional AWS S3 (`league/flysystem-aws-s3-v3`) |
+| Frontend assets | Laravel Mix, Bootstrap 5, Vue-related UI libs in `package.json` |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Local setup
 
-## Learning Laravel
+1. **Clone the repository**
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+   ```bash
+   git clone https://github.com/maherasim/ezzyrock.git
+   cd ezzyrock
+   ```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 1500 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+2. **Install PHP dependencies**
 
-## Laravel Sponsors
+   ```bash
+   composer install
+   ```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
+3. **Environment file**
 
-### Premium Partners
+   ```bash
+   copy .env.example .env   # Windows
+   # cp .env.example .env   # macOS / Linux
+   ```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[Many](https://www.many.co.uk)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- **[Curotec](https://www.curotec.com/)**
-- **[OP.GG](https://op.gg)**
+   Edit `.env` and set at least `APP_KEY`, `APP_URL`, database credentials (`DB_*`), and any third-party keys you use (mail, maps, payments, etc.). Never commit real secrets.
+
+4. **Application key**
+
+   ```bash
+   php artisan key:generate
+   ```
+
+5. **Database**
+
+   Create an empty database, then run:
+
+   ```bash
+   php artisan migrate
+   ```
+
+   Seeders (if your project uses them):
+
+   ```bash
+   php artisan db:seed
+   ```
+
+6. **Storage link** (if serving uploads from `public`)
+
+   ```bash
+   php artisan storage:link
+   ```
+
+7. **Front-end build**
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+   For production builds: `npm run prod`.
+
+8. **Run the app**
+
+   ```bash
+   php artisan serve
+   ```
+
+   Open the URL shown in the terminal (often `http://127.0.0.1:8000`).
+
+## Project layout (high level)
+
+- `app/Http/Controllers/API` — REST-style API controllers (e.g. categories, bookings, payments).
+- `routes/api.php` / `routes/web.php` — route definitions.
+- `database/migrations` — schema changes.
+- `public/` — web root and compiled/static assets.
+
+## Configuration tips
+
+- **Timezone & locale:** set `APP_TIMEZONE` and language-related options in `.env` as needed.
+- **Mail:** configure `MAIL_*` for your SMTP or development mail catcher.
+- **Google Maps:** set `GOOGLE_MAPS_API_KEY` when using map/geocoding features.
+- **File storage:** adjust `FILESYSTEM_DISK` / `FILESYSTEM_DRIVER` and AWS variables if using S3.
 
 ## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Use feature branches and open pull requests against `main`. Keep `.env` out of version control and document new env variables in `.env.example` without real credentials.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project’s `composer.json` declares **MIT** for the Laravel application scaffold. Third-party packages retain their own licenses. Confirm licensing with the project owner if you redistribute the full product.
