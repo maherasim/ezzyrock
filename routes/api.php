@@ -66,6 +66,8 @@ Route::get('dashboard-detail', [API\DashboardController::class, 'dashboardDetail
 Route::get('service-rating-list', [API\ServiceController::class, 'getServiceRating']);
 Route::get('user-detail', [API\User\UserController::class, 'userDetail']);
 Route::post('service-detail', [API\ServiceController::class, 'getServiceDetail']);
+Route::post('product-detail', [API\ProductController::class, 'getProductDetail']);
+Route::post('post-detail', [API\PostController::class, 'getPostDetail']);
 Route::get('user-list', [API\User\UserController::class, 'userList']);
 Route::get('booking-status', [API\BookingController::class, 'bookingStatus']);
 Route::post('handyman-reviews', [API\User\UserController::class, 'handymanReviewsList']);
