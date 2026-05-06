@@ -10,6 +10,7 @@ use App\Models\{
     Category,
     Service,
     Product,
+    Post,
     Payment,
     Slider,
     User,
@@ -56,6 +57,8 @@ use App\Http\Resources\PromotionalBannerResource;
 use App\Traits\TranslationTrait;
 
 use App\Traits\ZoneTrait;
+use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
 {
@@ -108,12 +111,40 @@ class DashboardController extends Controller
             ->get();
         $promotional_banners = PromotionalBannerResource::collection($banners);
 
-        // Get categories
+        // Service categories (legacy key kept for backward compatibility)
         $category_section = FrontendSetting::getValueByKey('section_2');
         $category = CategoryResource::collection(
-            Category::whereIN('id', $category_section->category_id)
-                ->orderBy('name', 'asc')
-                ->paginate(8)
+            Category::query()
+                ->where('status', 1)
+                ->where('module_type', Category::MODULE_SERVICE)
+                ->when(
+                    !empty($category_section->category_id) && is_array($category_section->category_id),
+                    fn($q) => $q->whereIn('id', $category_section->category_id)
+                )
+                ->orderByDesc('is_featured')
+                ->orderBy('id')
+                ->limit(8)
+                ->get()
+        );
+
+        $product_category = CategoryResource::collection(
+            Category::query()
+                ->where('status', 1)
+                ->where('module_type', Category::MODULE_ECOMMERCE)
+                ->orderByDesc('is_featured')
+                ->orderBy('id')
+                ->limit(8)
+                ->get()
+        );
+
+        $classified_category = CategoryResource::collection(
+            Category::query()
+                ->where('status', 1)
+                ->where('module_type', Category::MODULE_CLASSIFIED)
+                ->orderByDesc('is_featured')
+                ->orderBy('id')
+                ->limit(8)
+                ->get()
         );
 
         // Initialize service query
@@ -209,6 +240,102 @@ class DashboardController extends Controller
                 $service = $service->whereIn('id', $service_in_location);
             }
         }
+
+        // Products for landing home block
+        $productQuery = Product::query()
+            ->where('service_type', 'ecommerce')
+            ->where('status', 1)
+            ->where('service_request_status', 'approve')
+            ->with(['providers', 'category', 'subcategory', 'translations'])
+            ->orderByDesc('is_featured')
+            ->latest();
+
+        if (Schema::hasColumn('products', 'total_stock')) {
+            $productQuery->where('total_stock', '>', 0);
+        }
+
+        $productQuery->whereHas('providers', function ($query) {
+            $query->where('status', 1);
+        });
+
+        if (default_earning_type() === 'subscription') {
+            $productQuery->whereHas('providers', function ($query) {
+                $query->where('status', 1)->where('is_subscribe', 1);
+            });
+        }
+
+        if ($request->has('city_id') && !empty($request->city_id)) {
+            $productQuery->whereHas('providers', function ($query) use ($request) {
+                $query->where('city_id', $request->city_id);
+            });
+        }
+
+        if (
+            $request->has('latitude') && !empty($request->latitude) &&
+            $request->has('longitude') && !empty($request->longitude)
+        ) {
+            $serviceZone = ServiceZone::all();
+            if (count($serviceZone) > 0) {
+                try {
+                    $matchingZoneIds = $this->getMatchingZonesByLatLng($request->latitude, $request->longitude);
+                    if (!empty($matchingZoneIds)) {
+                        $productQuery->whereHas('productZoneMapping', function ($query) use ($matchingZoneIds) {
+                            $query->whereIn('zone_id', $matchingZoneIds);
+                        });
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Product location filtering error: ' . $e->getMessage());
+                }
+            }
+        }
+
+        $product = JsonResource::collection($productQuery->paginate($per_page));
+
+        // Classified posts for landing home block
+        $postQuery = Post::query()
+            ->where('service_type', 'classified')
+            ->where('status', 1)
+            ->where('service_request_status', 'approve')
+            ->with(['providers', 'category', 'subcategory', 'translations'])
+            ->orderByDesc('is_featured')
+            ->latest();
+
+        $postQuery->whereHas('providers', function ($query) {
+            $query->where('status', 1);
+        });
+
+        if (default_earning_type() === 'subscription') {
+            $postQuery->whereHas('providers', function ($query) {
+                $query->where('status', 1)->where('is_subscribe', 1);
+            });
+        }
+
+        if ($request->has('city_id') && !empty($request->city_id)) {
+            $postQuery->whereHas('providers', function ($query) use ($request) {
+                $query->where('city_id', $request->city_id);
+            });
+        }
+
+        if (
+            $request->has('latitude') && !empty($request->latitude) &&
+            $request->has('longitude') && !empty($request->longitude)
+        ) {
+            $serviceZone = ServiceZone::all();
+            if (count($serviceZone) > 0) {
+                try {
+                    $matchingZoneIds = $this->getMatchingZonesByLatLng($request->latitude, $request->longitude);
+                    if (!empty($matchingZoneIds)) {
+                        $postQuery->whereHas('postZoneMapping', function ($query) use ($matchingZoneIds) {
+                            $query->whereIn('zone_id', $matchingZoneIds);
+                        });
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Post location filtering error: ' . $e->getMessage());
+                }
+            }
+        }
+
+        $post = JsonResource::collection($postQuery->paginate($per_page));
 
         $provider = User::where('user_type', 'provider')->where('status', 1);
 
@@ -387,7 +514,11 @@ class DashboardController extends Controller
             'slider'         => $slider,
             'promotional_banner' => $promotional_banners,
             'category'       => $category,
+            'product_category' => $product_category,
+            'classified_category' => $classified_category,
             'service'        => $service,
+            'product'        => $product,
+            'post'           => $post,
             'shop' => $shops,
             'featured_service' => $featured_service,
             'provider'       => $provider,
