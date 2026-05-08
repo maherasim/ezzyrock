@@ -230,6 +230,9 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('cart-checkout', [API\ProductCartController::class, 'checkout']);
     Route::post('product-razorpay-verify', [API\ProductCartController::class, 'verifyRazorpay']);
     Route::post('product-payment-complete', [API\ProductCartController::class, 'completePayment']);
+    Route::get('my-product-orders', [API\ProductOrderController::class, 'list']);
+    Route::get('my-product-orders/{id}', [API\ProductOrderController::class, 'detail']);
+    Route::post('product-order-detail', [API\ProductOrderController::class, 'detail']);
 
     Route::post('update-location', [API\BookingController::class, 'updateLocation']);
     Route::get('get-location', [API\BookingController::class, 'getLocation']);
