@@ -37,6 +37,8 @@ class ProductResource extends JsonResource
             'has_variants' => $this->variants->where('status', true)->where('stock', '>', 0)->count() > 0,
             'service_type' => $this->service_type,
             'service_request_status' => $this->service_request_status,
+            'total_review' => $this->reviews_count ?? 0,
+            'total_rating' => $this->reviews_avg_rating ? (float) number_format($this->reviews_avg_rating, 2) : 0,
             'deleted_at' => $this->deleted_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

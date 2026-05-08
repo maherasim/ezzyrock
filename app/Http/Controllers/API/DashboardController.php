@@ -248,6 +248,8 @@ class DashboardController extends Controller
             ->where('status', 1)
             ->where('service_request_status', 'approve')
             ->with(['providers', 'category', 'subcategory', 'translations', 'variants'])
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
             ->orderByDesc('is_featured')
             ->latest();
 
