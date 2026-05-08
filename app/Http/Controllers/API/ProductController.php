@@ -74,23 +74,45 @@ class ProductController extends Controller
             ->where('status', true)
             ->where('stock', '>', 0)
             ->values()
-            ->map(function ($variant) {
+            ->map(function ($variant) use ($product) {
+                $maxPurchaseQty = (int) ($variant->max_purchase_qty ?: ($product->max_purchase_qty ?: 99));
+                $maxAllowedQty = max(1, min(99, (int) $variant->stock, $maxPurchaseQty));
+
                 return [
                     'id' => $variant->id,
+                    'product_variant_id' => $variant->id,
                     'product_attribute_option_id' => $variant->product_attribute_option_id,
                     'option_value' => optional($variant->option)->value,
                     'attribute_name' => optional(optional($variant->option)->attribute)->name,
+                    'label' => trim((optional(optional($variant->option)->attribute)->name ? optional(optional($variant->option)->attribute)->name . ': ' : '') . (optional($variant->option)->value ?? ('Option #' . $variant->id))),
                     'price' => $variant->price,
                     'price_format' => getPriceFormat($variant->price),
                     'stock' => $variant->stock,
                     'max_purchase_qty' => $variant->max_purchase_qty,
+                    'max_allowed_quantity' => $maxAllowedQty,
+                    'is_available' => $maxAllowedQty > 0,
                     'status' => $variant->status,
                 ];
             });
 
+        $maxAllowed = min(99, (int) ($product->total_stock ?? 99));
+        if (!empty($product->max_purchase_qty)) {
+            $maxAllowed = min($maxAllowed, (int) $product->max_purchase_qty);
+        }
+
+        $productData = (new ProductResource($product))->toArray($request);
+        $productData['total_stock'] = (int) ($product->total_stock ?? 0);
+        $productData['max_purchase_qty'] = $product->max_purchase_qty;
+        $productData['max_allowed_quantity'] = max(0, $maxAllowed);
+        $productData['requires_variant_selection'] = $activeVariants->count() > 0;
+        $productData['variant_attribute_name'] = $activeVariants->first()['attribute_name'] ?? null;
+        $productData['variants'] = $activeVariants;
+        $productData['product_unit_id'] = $product->product_unit_id;
+        $productData['product_unit_name'] = optional($product->productUnit)->name;
+
         return response()->json([
             'status' => true,
-            'data' => new ProductResource($product),
+            'data' => $productData,
             'variants' => $activeVariants,
             'has_variants' => $activeVariants->count() > 0,
         ]);
