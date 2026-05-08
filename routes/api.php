@@ -222,10 +222,14 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('create-wallet-stripe-payment', [App\Http\Controllers\WalletController::class, 'createWalletStripePayment']);
     Route::get('payment-gateway-list', [API\FrontendSettingController::class, 'getPaymentGatewayList']);
     Route::get('payment-gateways', [API\PaymentController::class, 'paymentGateways']);
+    Route::get('my-cart', [API\ProductCartController::class, 'list']);
     Route::get('cart-list', [API\ProductCartController::class, 'list']);
     Route::post('cart-add', [API\ProductCartController::class, 'add']);
     Route::post('cart-update', [API\ProductCartController::class, 'update']);
     Route::post('cart-remove', [API\ProductCartController::class, 'remove']);
+    Route::post('cart-checkout', [API\ProductCartController::class, 'checkout']);
+    Route::post('product-razorpay-verify', [API\ProductCartController::class, 'verifyRazorpay']);
+    Route::post('product-payment-complete', [API\ProductCartController::class, 'completePayment']);
 
     Route::post('update-location', [API\BookingController::class, 'updateLocation']);
     Route::get('get-location', [API\BookingController::class, 'getLocation']);
