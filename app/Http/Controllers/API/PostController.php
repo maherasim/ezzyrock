@@ -12,8 +12,21 @@ class PostController extends Controller
     public function getPostList(Request $request)
     {
         $query = Post::where('service_type', 'classified')
-            ->with(['providers', 'category', 'subcategory', 'translations'])
-            ->orderBy('created_at', 'desc');
+            ->with(['providers', 'category', 'subcategory', 'translations']);
+
+        if ($request->has('sort_by')) {
+            if ($request->sort_by === 'price_low_high') {
+                $query->orderBy('price', 'asc');
+            } elseif ($request->sort_by === 'price_high_low') {
+                $query->orderBy('price', 'desc');
+            } elseif ($request->sort_by === 'newest') {
+                $query->orderBy('created_at', 'desc');
+            } else {
+                $query->orderBy('created_at', 'desc');
+            }
+        } else {
+            $query->orderBy('created_at', 'desc');
+        }
 
         $category = Category::onlyTrashed()->pluck('id');
         $query->whereNotIn('category_id', $category);
@@ -24,32 +37,76 @@ class PostController extends Controller
             $query->where('provider_id', auth()->id());
         } else {
             $query->where('status', 1);
+            $query->whereHas('providers', function ($q) {
+                $q->where('status', 1);
+            });
         }
+        
         if ($request->has('status') && $request->status !== null && $request->status !== '') {
             $query->where('status', $request->status);
         }
         if ($request->has('provider_id')) {
             $query->where('provider_id', $request->provider_id);
         }
-        if ($request->has('category_id') && $request->category_id != 'null') {
-            $query->where('category_id', $request->category_id);
+        if ($request->has('category_id') && $request->category_id != 'null' && $request->category_id != '') {
+            $categoryIds = is_array($request->category_id) ? $request->category_id : explode(',', $request->category_id);
+            $query->whereIn('category_id', $categoryIds);
         }
-        if ($request->has('subcategory_id') && $request->subcategory_id != '') {
-            $query->whereIn('subcategory_id', explode(',', $request->subcategory_id));
+        if ($request->has('subcategory_id') && $request->subcategory_id != 'null' && $request->subcategory_id != '') {
+            $subcategoryIds = is_array($request->subcategory_id) ? $request->subcategory_id : explode(',', $request->subcategory_id);
+            $query->whereIn('subcategory_id', $subcategoryIds);
+        }
+
+        if ($request->has('min_price') && $request->min_price !== null && $request->min_price !== '') {
+            $query->where('price', '>=', $request->min_price);
+        }
+        if ($request->has('max_price') && $request->max_price !== null && $request->max_price !== '') {
+            $query->where('price', '<=', $request->max_price);
+        }
+
+        if ($request->has('city_id') && !empty($request->city_id)) {
+            $query->whereHas('providers', function ($q) use ($request) {
+                $q->where('city_id', $request->city_id);
+            });
+        }
+
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('description', 'LIKE', "%{$search}%");
+            });
         }
 
         $per_page = $request->get('per_page', config('constant.PER_PAGE_LIMIT', 15));
         $items = $per_page === 'all' ? $query->get() : $query->paginate($per_page);
 
+        $categories = Category::where('status', 1)->where('module_type', Category::MODULE_CLASSIFIED)->withCount('posts')->get();
+        $subcategories = \App\Models\SubCategory::where('status', 1)->whereHas('category', function($q) {
+            $q->where('module_type', Category::MODULE_CLASSIFIED);
+        })->withCount('posts')->get();
+
+        if ($per_page === 'all') {
+            return response()->json([
+                'status' => true,
+                'category' => \App\Http\Resources\API\CategoryResource::collection($categories),
+                'subcategory' => \App\Http\Resources\API\SubCategoryResource::collection($subcategories),
+                'data' => \App\Http\Resources\API\PostResource::collection($items),
+                'pagination' => null,
+            ]);
+        }
+
         return response()->json([
             'status' => true,
-            'data' => $items,
-            'pagination' => $per_page !== 'all' && method_exists($items, 'total') ? [
+            'category' => \App\Http\Resources\API\CategoryResource::collection($categories),
+            'subcategory' => \App\Http\Resources\API\SubCategoryResource::collection($subcategories),
+            'data' => \App\Http\Resources\API\PostResource::collection($items),
+            'pagination' => [
                 'total_items' => $items->total(),
                 'per_page' => $items->perPage(),
                 'currentPage' => $items->currentPage(),
                 'totalPages' => $items->lastPage(),
-            ] : null,
+            ],
         ]);
     }
 
@@ -60,7 +117,13 @@ class PostController extends Controller
         if (!$post) {
             return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
         }
-        return response()->json(['status' => true, 'data' => $post]);
+        
+        $postData = (new \App\Http\Resources\API\PostResource($post))->toArray($request);
+
+        return response()->json([
+            'status' => true, 
+            'data' => $postData
+        ]);
     }
 
     public function poststatus(Request $request)
