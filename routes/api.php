@@ -88,6 +88,13 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     // shop api
     Route::post('shop-delete/{id}', [API\ShopController::class, 'deleteShop']);
     Route::post('shop-restore/{id}', [API\ShopController::class, 'restoreShop']);
+
+    // User Classified Post APIs
+    Route::get('user-post-list', [API\PostController::class, 'getUserPostList']);
+    Route::get('post-form-config', [API\PostController::class, 'getPostFormConfig']);
+    Route::post('save-post', [API\PostController::class, 'savePost']);
+    Route::post('delete-post', [API\PostController::class, 'deletePost']);
+
     Route::post('shop-force-delete/{id}', [API\ShopController::class, 'forceDeleteShop']);
     Route::post('shop-create', [API\ShopController::class, 'shopCreate']);
     Route::post('shop-update/{id}', [API\ShopController::class, 'shopUpdate']);
