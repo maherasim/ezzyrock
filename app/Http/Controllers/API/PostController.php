@@ -81,16 +81,39 @@ class PostController extends Controller
         $per_page = $request->get('per_page', config('constant.PER_PAGE_LIMIT', 15));
         $items = $per_page === 'all' ? $query->get() : $query->paginate($per_page);
 
-        $categories = Category::where('status', 1)->where('module_type', Category::MODULE_CLASSIFIED)->withCount('posts')->get();
-        $subcategories = \App\Models\SubCategory::where('status', 1)->whereHas('category', function($q) {
-            $q->where('module_type', Category::MODULE_CLASSIFIED);
-        })->withCount('posts')->get();
+        $categoriesData = Category::where('status', 1)
+            ->where('module_type', Category::MODULE_CLASSIFIED)
+            ->withCount('posts')
+            ->get()
+            ->map(function ($category) {
+                $subcategories = \App\Models\SubCategory::where('status', 1)
+                    ->where('category_id', $category->id)
+                    ->withCount('posts')
+                    ->get()
+                    ->map(function ($subcategory) {
+                        return [
+                            'id' => $subcategory->id,
+                            'name' => $subcategory->name,
+                            'category_id' => $subcategory->category_id,
+                            'subcategory_image' => getSingleMedia($subcategory, 'subcategory_image', null),
+                            'posts_count' => $subcategory->posts_count ?? 0,
+                        ];
+                    });
+
+                return [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'color' => $category->color,
+                    'category_image' => getSingleMedia($category, 'category_image', null),
+                    'posts_count' => $category->posts_count ?? 0,
+                    'subcategories' => $subcategories,
+                ];
+            });
 
         if ($per_page === 'all') {
             return response()->json([
                 'status' => true,
-                'category' => \App\Http\Resources\API\CategoryResource::collection($categories),
-                'subcategory' => \App\Http\Resources\API\SubCategoryResource::collection($subcategories),
+                'category' => $categoriesData,
                 'data' => \App\Http\Resources\API\PostResource::collection($items),
                 'pagination' => null,
             ]);
@@ -98,8 +121,7 @@ class PostController extends Controller
 
         return response()->json([
             'status' => true,
-            'category' => \App\Http\Resources\API\CategoryResource::collection($categories),
-            'subcategory' => \App\Http\Resources\API\SubCategoryResource::collection($subcategories),
+            'category' => $categoriesData,
             'data' => \App\Http\Resources\API\PostResource::collection($items),
             'pagination' => [
                 'total_items' => $items->total(),
