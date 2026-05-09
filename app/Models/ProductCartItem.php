@@ -46,6 +46,6 @@ class ProductCartItem extends Model
                     ->where('status', 1)
                     ->where('service_request_status', 'approve');
             })
-            ->sum('quantity');
+            ->count();
     }
 }
