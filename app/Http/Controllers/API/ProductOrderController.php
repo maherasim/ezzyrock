@@ -17,6 +17,7 @@ class ProductOrderController extends Controller
 
         $orders = ProductOrder::query()
             ->where('user_id', $user->id)
+            ->with(['items.product'])
             ->withCount('items');
 
         if ($request->filled('status')) {
@@ -44,7 +45,7 @@ class ProductOrderController extends Controller
             }
         }
 
-        $orderBy = strtolower((string) $request->get('orderby', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $orderBy = 'desc';
         $orders = $orders->orderBy('created_at', $orderBy)->paginate($perPage);
 
         return response()->json([
@@ -90,12 +91,16 @@ class ProductOrderController extends Controller
 
     private function serializeOrderListItem(ProductOrder $order): array
     {
+        $firstItem = $order->items->first();
+        $productImage = $firstItem && $firstItem->product ? getSingleMedia($firstItem->product, 'product_attachment', null) : null;
+
         return [
             'id' => $order->id,
             'order_number' => $order->order_number,
-            'order_date' => optional($order->created_at)->format('Y-m-d H:i'),
-            'created_at' => optional($order->created_at)->toISOString(),
+            'order_date' => optional($order->created_at)->setTimezone('Asia/Kolkata')->format('Y-m-d H:i:s'),
+            'created_at' => optional($order->created_at)->setTimezone('Asia/Kolkata')->toISOString(),
             'status' => $order->status,
+            'product_image' => $productImage,
             'payment_type' => $order->payment_type,
             'payment_status' => $order->payment_status,
             'items_count' => (int) ($order->items_count ?? 0),
@@ -116,8 +121,8 @@ class ProductOrderController extends Controller
         return [
             'id' => $order->id,
             'order_number' => $order->order_number,
-            'order_date' => optional($order->created_at)->format('Y-m-d H:i'),
-            'created_at' => optional($order->created_at)->toISOString(),
+            'order_date' => optional($order->created_at)->setTimezone('Asia/Kolkata')->format('Y-m-d H:i:s'),
+            'created_at' => optional($order->created_at)->setTimezone('Asia/Kolkata')->toISOString(),
             'status' => $order->status,
             'payment_type' => $order->payment_type,
             'payment_status' => $order->payment_status,
