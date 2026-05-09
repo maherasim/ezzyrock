@@ -39,6 +39,16 @@ class PostResource extends JsonResource
             'deleted_at' => $this->deleted_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+            'order_detail' => [
+                'post_name' => $this->getTranslation($this->translations, $headerValue, 'name', $this->name) ?? $this->name,
+                'price' => $this->price,
+                'price_format' => getPriceFormat($this->price),
+                'discount' => $this->discount,
+                'discount_amount' => $this->discount > 0 ? ($this->price * $this->discount / 100) : 0,
+                'discount_amount_format' => getPriceFormat($this->discount > 0 ? ($this->price * $this->discount / 100) : 0),
+                'subtotal' => $this->discount > 0 ? ($this->price - ($this->price * $this->discount / 100)) : $this->price,
+                'subtotal_format' => getPriceFormat($this->discount > 0 ? ($this->price - ($this->price * $this->discount / 100)) : $this->price),
+            ],
         ];
     }
 }
