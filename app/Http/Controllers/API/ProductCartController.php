@@ -46,6 +46,7 @@ class ProductCartController extends Controller
             'data' => $items,
             'summary' => $summary,
             'cart_count' => ProductCartItem::totalEcommerceQuantityForUser((int) $user->id),
+            'cart_entries' => $cartRows->count(),
             'checkout' => [
                 'shipping_required_fields' => [
                     'shipping_name',
