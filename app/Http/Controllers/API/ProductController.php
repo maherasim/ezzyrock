@@ -118,10 +118,10 @@ class ProductController extends Controller
         $items = $per_page === 'all' ? $query->get() : $query->paginate($per_page);
 
         if ($per_page === 'all') {
-            $categories = Category::where('status', 1)->where('module_type', Category::MODULE_ECOMMERCE)->get();
+            $categories = Category::where('status', 1)->where('module_type', Category::MODULE_ECOMMERCE)->withCount('products')->get();
             $subcategories = SubCategory::where('status', 1)->whereHas('category', function($q) {
                 $q->where('module_type', Category::MODULE_ECOMMERCE);
-            })->get();
+            })->withCount('products')->get();
 
             return response()->json([
                 'status' => true,
@@ -132,10 +132,10 @@ class ProductController extends Controller
             ]);
         }
 
-        $categories = Category::where('status', 1)->where('module_type', Category::MODULE_ECOMMERCE)->get();
+        $categories = Category::where('status', 1)->where('module_type', Category::MODULE_ECOMMERCE)->withCount('products')->get();
         $subcategories = SubCategory::where('status', 1)->whereHas('category', function($q) {
             $q->where('module_type', Category::MODULE_ECOMMERCE);
-        })->get();
+        })->withCount('products')->get();
 
         return response()->json([
             'status' => true,

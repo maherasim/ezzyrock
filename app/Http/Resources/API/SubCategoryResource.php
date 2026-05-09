@@ -30,6 +30,7 @@ class SubCategoryResource extends JsonResource
             'category_extension' => $extention,
             'category_name' =>  $this->getTranslation(optional($this->category)->translations, $headerValue, 'name', optional($this->category)->name ?? null) ?? optional($this->category)->name,
             'services' => $this->services->count(),
+            'products' => $this->products->count(),
             'deleted_at' => $this->deleted_at
         ];
     }

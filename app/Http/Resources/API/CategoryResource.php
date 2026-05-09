@@ -28,6 +28,7 @@ class CategoryResource extends JsonResource
             'category_image'=> getSingleMedia($this, 'category_image',null),
             'category_extension' => $extention,
             'services' => $this->services->count(),
+            'products' => $this->products->count(),
             'deleted_at'        => $this->deleted_at,
         ];
     }
