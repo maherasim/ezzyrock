@@ -4,6 +4,7 @@ namespace App\Http\Resources\API;
 
 use App\Traits\TranslationTrait;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Http\Resources\API\ProductVariantResource;
 
 class ProductResource extends JsonResource
 {
@@ -33,8 +34,16 @@ class ProductResource extends JsonResource
             'category_name' => $this->getTranslation(optional($this->category)->translations, $headerValue, 'name', optional($this->category)->name ?? null) ?? optional($this->category)->name,
             'subcategory_name' => $this->getTranslation(optional($this->subcategory)->translations, $headerValue, 'name', optional($this->subcategory)->name ?? null) ?? optional($this->subcategory)->name,
             'attchments' => getAttachments($this->getMedia('product_attachment')),
+            'product_image' => getSingleMedia($this, 'product_attachment', null),
             'attchments_array' => getAttachmentArray($this->getMedia('product_attachment'), null),
             'has_variants' => $this->variants->where('status', true)->where('stock', '>', 0)->count() > 0,
+            'variants' => ProductVariantResource::collection($this->variants->where('status', true)->where('stock', '>', 0)),
+            'total_stock' => (int) ($this->total_stock ?? 0),
+            'max_purchase_qty' => $this->max_purchase_qty,
+            'requires_variant_selection' => $this->variants->where('status', true)->where('stock', '>', 0)->count() > 0,
+            'variant_attribute_name' => optional(optional(optional($this->variants->where('status', true)->where('stock', '>', 0)->first())->option)->attribute)->name,
+            'product_unit_id' => $this->product_unit_id,
+            'product_unit_name' => optional($this->productUnit)->name,
             'service_type' => $this->service_type,
             'service_request_status' => $this->service_request_status,
             'total_review' => $this->reviews_count ?? 0,

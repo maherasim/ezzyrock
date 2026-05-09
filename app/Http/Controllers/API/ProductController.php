@@ -7,17 +7,39 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\API\ProductResource;
+use App\Traits\ZoneTrait;
+use App\Models\ServiceZone;
 
 class ProductController extends Controller
 {
+    use ZoneTrait;
+
     public function getProductList(Request $request)
     {
         $query = Product::where('service_type', 'ecommerce')
+            ->where('service_request_status', 'approve')
             ->with(['providers', 'category', 'subcategory', 'translations', 'variants'])
-            ->orderBy('created_at', 'desc');
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
+            ->orderByDesc('is_featured')
+            ->latest();
 
         $category = Category::onlyTrashed()->pluck('id');
         $query->whereNotIn('category_id', $category);
+
+        if (\Schema::hasColumn('products', 'total_stock')) {
+            $query->where('total_stock', '>', 0);
+        }
+
+        $query->whereHas('providers', function ($query) {
+            $query->where('status', 1);
+        });
+
+        if (default_earning_type() === 'subscription') {
+            $query->whereHas('providers', function ($query) {
+                $query->where('status', 1)->where('is_subscribe', 1);
+            });
+        }
 
         if (auth()->user() && auth()->user()->hasRole('admin')) {
             $query->withTrashed();
@@ -32,11 +54,61 @@ class ProductController extends Controller
         if ($request->has('provider_id')) {
             $query->where('provider_id', $request->provider_id);
         }
-        if ($request->has('category_id') && $request->category_id != 'null') {
-            $query->where('category_id', $request->category_id);
+        if ($request->has('category_id') && $request->category_id != 'null' && $request->category_id != '') {
+            $categoryIds = is_array($request->category_id) ? $request->category_id : explode(',', $request->category_id);
+            $query->whereIn('category_id', $categoryIds);
         }
-        if ($request->has('subcategory_id') && $request->subcategory_id != '') {
-            $query->whereIn('subcategory_id', explode(',', $request->subcategory_id));
+        if ($request->has('subcategory_id') && $request->subcategory_id != 'null' && $request->subcategory_id != '') {
+            $subcategoryIds = is_array($request->subcategory_id) ? $request->subcategory_id : explode(',', $request->subcategory_id);
+            $query->whereIn('subcategory_id', $subcategoryIds);
+        }
+
+        if ($request->has('min_price') && $request->min_price !== null && $request->min_price !== '') {
+            $query->where('price', '>=', $request->min_price);
+        }
+        if ($request->has('max_price') && $request->max_price !== null && $request->max_price !== '') {
+            $query->where('price', '<=', $request->max_price);
+        }
+
+        if ($request->has('brand_id') && $request->brand_id !== null && $request->brand_id !== '') {
+            $brandIds = is_array($request->brand_id) ? $request->brand_id : explode(',', $request->brand_id);
+            // Check if column exists to prevent error if brand_id is not yet added to DB
+            if (\Schema::hasColumn('products', 'brand_id')) {
+                $query->whereIn('brand_id', $brandIds);
+            }
+        }
+
+        if ($request->has('city_id') && !empty($request->city_id)) {
+            $query->whereHas('providers', function ($query) use ($request) {
+                $query->where('city_id', $request->city_id);
+            });
+        }
+
+        if ($request->has('latitude') && !empty($request->latitude) && $request->has('longitude') && !empty($request->longitude)) {
+            $latitude = $request->latitude;
+            $longitude = $request->longitude;
+
+            $serviceZone = ServiceZone::all();
+            if (count($serviceZone) > 0) {
+                try {
+                    $matchingZoneIds = $this->getMatchingZonesByLatLng($latitude, $longitude);
+                    if (!empty($matchingZoneIds)) {
+                        $query->whereHas('productZoneMapping', function ($query) use ($matchingZoneIds) {
+                            $query->whereIn('zone_id', $matchingZoneIds);
+                        });
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Product location filtering error: ' . $e->getMessage());
+                }
+            }
+        }
+
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                    ->orWhere('description', 'LIKE', "%{$search}%");
+            });
         }
 
         $per_page = $request->get('per_page', config('constant.PER_PAGE_LIMIT', 15));
