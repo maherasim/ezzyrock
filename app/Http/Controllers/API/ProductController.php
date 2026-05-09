@@ -7,6 +7,9 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\API\ProductResource;
+use App\Http\Resources\API\CategoryResource;
+use App\Http\Resources\API\SubCategoryResource;
+use App\Models\SubCategory;
 use App\Traits\ZoneTrait;
 use App\Models\ServiceZone;
 
@@ -115,15 +118,29 @@ class ProductController extends Controller
         $items = $per_page === 'all' ? $query->get() : $query->paginate($per_page);
 
         if ($per_page === 'all') {
+            $categories = Category::where('status', 1)->where('module_type', Category::MODULE_ECOMMERCE)->get();
+            $subcategories = SubCategory::where('status', 1)->whereHas('category', function($q) {
+                $q->where('module_type', Category::MODULE_ECOMMERCE);
+            })->get();
+
             return response()->json([
                 'status' => true,
+                'category' => CategoryResource::collection($categories),
+                'subcategory' => SubCategoryResource::collection($subcategories),
                 'data' => ProductResource::collection($items),
                 'pagination' => null,
             ]);
         }
 
+        $categories = Category::where('status', 1)->where('module_type', Category::MODULE_ECOMMERCE)->get();
+        $subcategories = SubCategory::where('status', 1)->whereHas('category', function($q) {
+            $q->where('module_type', Category::MODULE_ECOMMERCE);
+        })->get();
+
         return response()->json([
             'status' => true,
+            'category' => CategoryResource::collection($categories),
+            'subcategory' => SubCategoryResource::collection($subcategories),
             'data' => ProductResource::collection($items),
             'pagination' => [
                 'total_items' => $items->total(),
