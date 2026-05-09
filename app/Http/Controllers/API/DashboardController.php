@@ -531,6 +531,9 @@ class DashboardController extends Controller
             'blogs' => $blogs,
             'is_email_verified' => $is_email_verified,
             'referral_rule' => $referral,
+            'cart_count' => (auth()->check() && auth()->user()->user_type === 'user') 
+                ? \App\Models\ProductCartItem::totalEcommerceQuantityForUser((int) auth()->id()) 
+                : 0,
         ];
 
         return comman_custom_response($response);
@@ -893,7 +896,9 @@ class DashboardController extends Controller
             "provider_banner_amount" => isset($provider_banner->promotion_price) ? (float)$provider_banner->promotion_price : 0,
             "promotional_banner" => isset($provider_banner->promotion_enable) ? (bool)$provider_banner->promotion_enable : false,
             "enable_chat" => isset($other_setting->enable_chat) ? $other_setting->enable_chat : 0,
-
+            'cart_count' => (auth()->check() && auth()->user()->user_type === 'user') 
+                ? \App\Models\ProductCartItem::totalEcommerceQuantityForUser((int) auth()->id()) 
+                : 0,
         ];
         if (!empty($request->is_authenticated) && $request->is_authenticated == 1) {
             $response["google_map_key"] = $sitesetup->google_map_keys;

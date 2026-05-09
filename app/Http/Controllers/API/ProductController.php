@@ -129,6 +129,9 @@ class ProductController extends Controller
                 'subcategory' => SubCategoryResource::collection($subcategories),
                 'data' => ProductResource::collection($items),
                 'pagination' => null,
+                'cart_count' => (auth()->check() && auth()->user()->user_type === 'user') 
+                    ? \App\Models\ProductCartItem::totalEcommerceQuantityForUser((int) auth()->id()) 
+                    : 0,
             ]);
         }
 
@@ -148,6 +151,9 @@ class ProductController extends Controller
                 'currentPage' => $items->currentPage(),
                 'totalPages' => $items->lastPage(),
             ],
+            'cart_count' => (auth()->check() && auth()->user()->user_type === 'user') 
+                ? \App\Models\ProductCartItem::totalEcommerceQuantityForUser((int) auth()->id()) 
+                : 0,
         ]);
     }
 
