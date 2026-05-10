@@ -174,7 +174,7 @@ function getFileExistsCheck($media)
 function storeMediaFile($model, $file, $name)
 {
     if ($file) {
-        if (!in_array($name, ['service_attachment', 'package_attachment', 'blog_attachment', 'section5_attachment', 'helpdesk_attachment', 'helpdesk_activity_attachment', 'banner_attachment'])) {
+        if (!in_array($name, ['service_attachment', 'package_attachment', 'blog_attachment', 'section5_attachment', 'helpdesk_attachment', 'helpdesk_activity_attachment', 'banner_attachment', 'post_attachment'])) {
             $model->clearMediaCollection($name);
         }
         if (is_array($file)) {
