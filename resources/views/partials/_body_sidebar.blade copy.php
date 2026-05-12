@@ -424,6 +424,24 @@ $menu->add('<span>'.__('messages.plan').'</span><span class="custom-tooltip"><sp
 ->nickname('plan')
 ->data('permission', 'plan list');
 
+
+
+
+
+$menu->add('<span>'.__('User Plan').'</span><span class="custom-tooltip"><span class="tooltip-text">'.__('User Plan').'</span></span>', ['route' => 'user_plans.index_data'])
+->prepend('<svg width="15" height="15" class="sidebar-menu-icon" viewBox="0 0 18 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g clip-path="url(#clip0_2412_1261)">
+        <path d="M8.85625 3.125L11.875 6.14375V11.875H3.125V3.125H8.85625ZM8.85625 1.875H3.125C2.4375 1.875 1.875 2.4375 1.875 3.125V11.875C1.875 12.5625 2.4375 13.125 3.125 13.125H11.875C12.5625 13.125 13.125 12.5625 13.125 11.875V6.14375C13.125 5.8125 12.9937 5.49375 12.7562 5.2625L9.7375 2.24375C9.50625 2.00625 9.1875 1.875 8.85625 1.875ZM4.375 9.375H10.625V10.625H4.375V9.375ZM4.375 6.875H10.625V8.125H4.375V6.875ZM4.375 4.375H8.75V5.625H4.375V4.375Z" fill="#6C757D" />
+    </g>
+    <defs>
+        <clipPath id="clip0_2412_1261">
+            <rect width="15" height="15" fill="white" />
+        </clipPath>
+    </defs>
+</svg>')
+->nickname('plan')
+->data('permission', 'plan list');
+
 $menu->add('<span>'.__('messages.pages').'</span><span class="custom-tooltip"><span class="tooltip-text">'.__('messages.pages').'</span></span>', ['class' => ''])
 ->prepend('<svg width="15" height="15" class="sidebar-menu-icon" viewBox="0 0 18 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <g clip-path="url(#clip0_2412_1231)">
