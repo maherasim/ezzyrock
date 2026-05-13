@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use App\Models\Plans;
+use App\Models\UserPlan;
 use App\Models\PaymentGateway;
 use App\Models\ProviderSubscription;
 use App\Models\SubscriptionTransaction;
@@ -158,35 +158,16 @@ class SubscriptionController extends Controller
 
     public function subscriptionConfig(Request $request)
     {
-        $module = subscription_billing_plan_module();
-        $plansQuery = Plans::query()->where('status', 1)->where('module', $module);
-        $hasAnyPlan = ProviderSubscription::where('user_id', auth()->id())->exists();
-        if ($hasAnyPlan) {
-            $plansQuery->whereNotIn('identifier', ['free']);
-        }
-
+        $plansQuery = UserPlan::query()->where('status', 1);
         $plans = $plansQuery->orderBy('amount')->get();
         $gateways = PaymentGateway::query()
             ->where('status', 1)
             ->whereIn('type', ['stripe', 'razorPay', 'phonepe', 'paypal', 'paystack', 'flutterwave'])
             ->get();
 
-        $activeSubscription = provider_subscriptions_valid_query(auth()->id(), $module)
-            ->latest('id')
-            ->first();
-
-        $history = ProviderSubscription::query()
-            ->where('user_id', auth()->id())
-            ->where('module', $module)
-            ->latest('id')
-            ->limit(20)
-            ->get();
-
         return comman_custom_response([
             'plans' => PlanResource::collection($plans),
             'payment_methods' => PaymentGatewayResource::collection($gateways),
-            'active_subscription' => $activeSubscription ? new ProviderSubscribeResource($activeSubscription) : null,
-            'history' => ProviderSubscribeResource::collection($history),
         ]);
     }
 
@@ -197,10 +178,10 @@ class SubscriptionController extends Controller
             'payment_method' => 'required|in:stripe,razorPay,phonepe,paypal,paystack,flutterwave',
         ]);
 
-        $module = subscription_billing_plan_module();
+        $module = 'classified'; // User subscriptions use classified module
         $plan = Plans::query()
             ->where('status', 1)
-            ->where('module', $module)
+            ->where('module', subscription_billing_plan_module())
             ->with('planlimit')
             ->findOrFail((int) $request->plan_id);
 
