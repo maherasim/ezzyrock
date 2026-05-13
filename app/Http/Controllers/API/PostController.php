@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Post;
 use App\Models\Category;
+use App\Models\UserPlan;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
@@ -184,6 +185,7 @@ class PostController extends Controller
         if ($per_page === 'all') {
             return response()->json([
                 'status' => true,
+                'allow_to_create_featured' => $this->canCreateFeaturedPost($userId) ? 'yes' : 'no',
                 'data' => \App\Http\Resources\API\PostResource::collection($items),
                 'pagination' => null,
             ]);
@@ -191,6 +193,7 @@ class PostController extends Controller
 
         return response()->json([
             'status' => true,
+            'allow_to_create_featured' => $this->canCreateFeaturedPost($userId) ? 'yes' : 'no',
             'data' => \App\Http\Resources\API\PostResource::collection($items),
             'pagination' => [
                 'total_items' => $items->total(),
@@ -199,6 +202,51 @@ class PostController extends Controller
                 'totalPages' => $items->lastPage(),
             ],
         ]);
+    }
+
+    private function canCreateFeaturedPost(int $userId): bool
+    {
+        $subscription = user_subscriptions_valid_query($userId)
+            ->latest('id')
+            ->first();
+
+        if (! $subscription) {
+            return false;
+        }
+
+        $planKind = strtolower(trim((string) ($subscription->plan_type ?? '')));
+        $planLimitation = json_decode($subscription->plan_limitation ?? '', true);
+
+        if ((! is_array($planLimitation) || empty($planLimitation)) && ! empty($subscription->plan_id)) {
+            $plan = UserPlan::query()->with('planlimit')->find($subscription->plan_id);
+            if ($plan) {
+                $planKind = strtolower(trim((string) ($plan->plan_type ?? $planKind)));
+                $planLimitation = $plan->planlimit->plan_limitation ?? [];
+            }
+        }
+
+        if ($planKind === 'unlimited') {
+            return true;
+        }
+
+        $featuredLimit = is_array($planLimitation) ? ($planLimitation['featured_classified'] ?? null) : null;
+        if (! is_array($featuredLimit) || ($featuredLimit['is_checked'] ?? 'off') !== 'on') {
+            return false;
+        }
+
+        $limit = $featuredLimit['limit'] ?? null;
+        if ($limit === null || $limit === '') {
+            return true;
+        }
+
+        $usedCount = Post::query()
+            ->where('provider_id', $userId)
+            ->where('service_type', 'classified')
+            ->where('is_featured', 1)
+            ->where('status', 1)
+            ->count();
+
+        return $usedCount < (int) $limit;
     }
 
     public function getPostFormConfig(Request $request)
