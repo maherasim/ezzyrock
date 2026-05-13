@@ -362,12 +362,6 @@ class PostController extends Controller
             if ($post->provider_id !== $userId) {
                 return response()->json(['status' => false, 'message' => __('messages.unauthorized')], 403);
             }
-            if ($isFeatured === 1 && (int) $post->is_featured !== 1) {
-                $featuredMsg = plan_limit_user_message(get_provider_plan_limit($userId, 'featured_classified'), 'Featured posts');
-                if ($featuredMsg !== null) {
-                    return response()->json(['status' => false, 'message' => $featuredMsg], 403);
-                }
-            }
 
             $post->update([
                 'name' => $validated['name'],
@@ -379,17 +373,6 @@ class PostController extends Controller
             ]);
             $message = __('messages.update_form', ['form' => __('messages.post')]);
         } else {
-            $classifiedMsg = plan_limit_user_message(get_provider_plan_limit($userId, 'classified'), __('messages.posts'));
-            if ($classifiedMsg !== null) {
-                return response()->json(['status' => false, 'message' => $classifiedMsg], 403);
-            }
-            if ($isFeatured === 1) {
-                $featuredMsg = plan_limit_user_message(get_provider_plan_limit($userId, 'featured_classified'), 'Featured posts');
-                if ($featuredMsg !== null) {
-                    return response()->json(['status' => false, 'message' => $featuredMsg], 403);
-                }
-            }
-
             $data = [
                 'name' => $validated['name'],
                 'category_id' => $validated['category_id'],
