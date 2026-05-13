@@ -86,7 +86,7 @@
                                 <div class="form-group col-md-6">
                                     <div class="custom-control custom-checkbox custom-control-inline">
                                         {{ html()->checkbox("plan_limitation[featured_classified][is_checked]", $isChecked === 'on', 'on')->class('custom-control-input checklist')->id("enable_featured_classified")->attribute('onClick', "showCheckLimitData('enable_featured_classified')") }}
-                                        <label class="custom-control-label" for="enable_featured_classified">{{ __('messages.plan_limitations', ['keyword' => __('messages.featured_classified)]) }}</label>
+                                        <label class="custom-control-label" for="enable_featured_classified">{{ __('messages.plan_limitations', ['keyword' => __('messages.featured_classified')]) }}</label>
                                     </div>
                                 </div>
                                 <div class="col-md-6 d-none enable_featured_classified" id="show-limit-0">
