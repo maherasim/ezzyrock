@@ -376,7 +376,17 @@ class UserController extends Controller
                     ->latest('id')
                     ->first();
 
-                $success['subscription'] = $this->formatUserSubscriptionForLogin($latestUserSubscription);
+                if (! $latestUserSubscription) {
+                    $latestUserSubscription = UserSubscription::query()
+                        ->where('user_id', $user->id)
+                        ->with('payment')
+                        ->latest('id')
+                        ->first();
+                }
+
+                $formattedUserSubscription = $this->formatUserSubscriptionForLogin($latestUserSubscription);
+                $success['subscription'] = $formattedUserSubscription;
+                $success['user_subscription'] = $formattedUserSubscription;
                 $success['is_subscribe'] = $activeUserSubscription ? 1 : 0;
             }
 
