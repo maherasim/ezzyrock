@@ -1281,33 +1281,28 @@
         </clipPath>
     </defs>
 </svg>')
-->nickname('plan')->data('permission', 'plan list');
-        }
+->nickname('user_plan')
+->data('permission', 'user_plan list');
 
- 
-
-
-
-
-        $menu
-            ->add(
-                '<span>' .
-                    __('messages.taxes') .
-                    '</span><span class="custom-tooltip"><span class="tooltip-text">' .
-                    __('messages.taxes') .
-                    '</span></span>',
-                ['route' => 'tax.index'],
-            )
-            ->prepend(
-                '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            $menu
+                ->add(
+                    '<span>' .
+                        __('messages.taxes') .
+                        '</span><span class="custom-tooltip"><span class="tooltip-text">' .
+                        __('messages.taxes') .
+                        '</span></span>',
+                    ['route' => 'tax.index'],
+                )
+                ->prepend(
+                    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <g clip-path="url(#clip0_1544_3650)">
-<path d="M18.75 5.25L5.25 18.75" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M7.125 9.75C8.57475 9.75 9.75 8.57475 9.75 7.125C9.75 5.67525 8.57475 4.5 7.125 4.5C5.67525 4.5 4.5 5.67525 4.5 7.125C4.5 8.57475 5.67525 9.75 7.125 9.75Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M16.875 19.5C18.3247 19.5 19.5 18.3247 19.5 16.875C19.5 15.4253 18.3247 14.25 16.875 14.25C15.4253 14.25 14.25 15.4253 14.25 16.875C14.25 18.3247 15.4253 19.5 16.875 19.5Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M18.75 5.25L5.25 18.75" stroke="currentColor" stroke-width="1.5"/>
+<path d="M7.125 9.75C8.57475 9.75 9.75 8.57475 9.75 7.125C9.75 5.67525 8.57475 4.5 7.125 4.5C5.67525 4.5 4.5 5.67525 4.5 7.125C4.5 8.57475 5.67525 9.75 7.125 9.75Z" stroke="currentColor" stroke-width="1.5"/>
+<path d="M16.875 19.5C18.3247 19.5 19.5 18.3247 19.5 16.875C19.5 15.4253 18.3247 14.25 16.875 14.25C15.4253 14.25 14.25 15.4253 14.25 16.875C14.25 18.3247 15.4253 19.5 16.875 19.5Z" stroke="currentColor" stroke-width="1.5"/>
 </g><defs><clipPath id="clip0_1544_3650"><rect width="24" height="24" fill="white"/></clipPath></defs></svg>',
-            )
-            ->nickname('tax')
-            ->data('permission', 'tax list');
+                )
+                ->nickname('tax')
+                ->data('permission', 'tax list');
 
         if (optional($othersetting)->blog == 1) {
             $menu
