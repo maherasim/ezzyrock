@@ -54,10 +54,6 @@ class UserClassifiedPostController extends Controller
     {
         $this->ensureCustomer();
         $userId = auth()->id();
-        $classifiedMsg = plan_limit_user_message(get_provider_plan_limit($userId, 'classified'), __('messages.posts'));
-        if ($classifiedMsg !== null) {
-            return redirect()->back()->withErrors($classifiedMsg)->withInput();
-        }
         $validated = $request->validate([
             'name' => [
                 'required',
@@ -80,12 +76,6 @@ class UserClassifiedPostController extends Controller
             'service_zones.*' => ['integer', Rule::exists('service_zones', 'id')->where(fn ($q) => $q->where('status', true))],
         ]);
         $isFeatured = (int) ($request->boolean('is_featured') ? 1 : 0);
-        if ($isFeatured === 1) {
-            $featuredMsg = plan_limit_user_message(get_provider_plan_limit($userId, 'featured_classified'), 'Featured posts');
-            if ($featuredMsg !== null) {
-                return redirect()->back()->withErrors($featuredMsg)->withInput();
-            }
-        }
 
         $data = [
             'name' => $validated['name'],
@@ -169,12 +159,6 @@ class UserClassifiedPostController extends Controller
             'service_zones.*' => ['integer', Rule::exists('service_zones', 'id')->where(fn ($q) => $q->where('status', true))],
         ]);
         $isFeatured = (int) ($request->boolean('is_featured') ? 1 : 0);
-        if ($isFeatured === 1 && (int) $post->is_featured !== 1) {
-            $featuredMsg = plan_limit_user_message(get_provider_plan_limit($userId, 'featured_classified'), 'Featured posts');
-            if ($featuredMsg !== null) {
-                return redirect()->back()->withErrors($featuredMsg)->withInput();
-            }
-        }
 
         $post->update([
             'name' => $validated['name'],
