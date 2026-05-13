@@ -83,11 +83,26 @@
                         <div>
                             @php
                                 $planValue = $plan->planlimit->plan_limitation ?? [];
+                                $classifiedIsChecked = $planValue['classified']['is_checked'] ?? 'off';
+                                $classifiedLimitValue = $planValue['classified']['limit'] ?? null;
                                 $isChecked = $planValue['featured_classified']['is_checked'] ?? 'off';
                                 $limitValue = $planValue['featured_classified']['limit'] ?? null;
                             @endphp
 
                             <div class="row show-checklist">
+                                <div class="form-group col-md-6">
+                                    <div class="custom-control custom-checkbox custom-control-inline">
+                                        {{ html()->checkbox("plan_limitation[classified][is_checked]", $classifiedIsChecked === 'on', 'on')->class('custom-control-input checklist')->id("enable_classified")->attribute('onClick', "showCheckLimitData('enable_classified')") }}
+                                        <label class="custom-control-label" for="enable_classified">{{ __('messages.plan_limitations', ['keyword' => __('messages.classified')]) }}</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 d-none enable_classified" id="show-limit-classified">
+                                    <div class="form-group">
+                                        {{ html()->label(__('messages.limit'), 'classified_limit')->class('form-control-label') }}
+                                        {{ html()->number("plan_limitation[classified][limit]", $classifiedLimitValue)->placeholder(__('messages.plan_limitations', ['keyword' => __('messages.classified')]))->class('form-control')->attribute('min', 0)->attribute('step', 'any') }}
+                                    </div>
+                                </div>
+
                                 <div class="form-group col-md-6">
                                     <div class="custom-control custom-checkbox custom-control-inline">
                                         {{ html()->checkbox("plan_limitation[featured_classified][is_checked]", $isChecked === 'on', 'on')->class('custom-control-input checklist')->id("enable_featured_classified")->attribute('onClick', "showCheckLimitData('enable_featured_classified')") }}

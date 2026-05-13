@@ -426,6 +426,7 @@ class UserController extends Controller
         }
 
         $payment = $subscription->payment;
+        $planLimitation = $this->resolveUserSubscriptionPlanLimitation($subscription);
         $paymentMeta = null;
         if ($payment && ! empty($payment->other_transaction_detail)) {
             $decodedMeta = json_decode((string) $payment->other_transaction_detail, true);
@@ -446,7 +447,9 @@ class UserController extends Controller
             'description' => $subscription->description,
             'plan_type' => $subscription->plan_type,
             'module' => $subscription->module,
-            'plan_limitation' => json_decode($subscription->plan_limitation ?? '', true),
+            'posts_limit' => $this->extractPlanLimitValue($planLimitation, 'classified'),
+            'featured_posts_limit' => $this->extractPlanLimitValue($planLimitation, 'featured_classified'),
+            'plan_limitation' => $planLimitation,
             'transaction' => $payment ? [
                 'id' => $payment->id,
                 'amount' => $payment->amount,
@@ -458,6 +461,38 @@ class UserController extends Controller
                 'updated_at' => $payment->updated_at,
             ] : null,
         ];
+    }
+
+    private function resolveUserSubscriptionPlanLimitation(UserSubscription $subscription): ?array
+    {
+        $planLimitation = json_decode($subscription->plan_limitation ?? '', true);
+        if (is_array($planLimitation) && ! empty($planLimitation)) {
+            return $planLimitation;
+        }
+
+        if (empty($subscription->plan_id)) {
+            return null;
+        }
+
+        $plan = UserPlan::query()->with('planlimit')->find($subscription->plan_id);
+        $planLimitation = $plan->planlimit->plan_limitation ?? null;
+
+        return is_array($planLimitation) ? $planLimitation : null;
+    }
+
+    private function extractPlanLimitValue(?array $planLimitation, string $key): ?int
+    {
+        if (! isset($planLimitation[$key]) || ! is_array($planLimitation[$key])) {
+            return null;
+        }
+
+        if (($planLimitation[$key]['is_checked'] ?? 'off') !== 'on') {
+            return null;
+        }
+
+        $limit = $planLimitation[$key]['limit'] ?? null;
+
+        return $limit === null || $limit === '' ? null : (int) $limit;
     }
 
     private function getFreePostsLimitForLogin(): int
