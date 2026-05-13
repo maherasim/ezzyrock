@@ -105,7 +105,7 @@
                             </div>
                         </div>
 
-                        {{ html()->submit(trans('messages.save_form', ['form' => trans('messages.user_plan')]))->class('btn btn-md btn-primary float-end') }}
+                        {{ html()->submit(__('messages.save'))->class('btn btn-md btn-primary float-end') }}
                         {{ html()->form()->close() }}
                     </div>
                 </div>
