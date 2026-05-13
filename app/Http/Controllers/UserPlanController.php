@@ -42,11 +42,7 @@ class UserPlanController extends Controller
             })
 
             ->editColumn('title', function ($query) {
-                if (auth()->user()->can('user_plan edit')) {
-                    $link = '<a class="btn-link btn-link-hover" href=' . route('user_plans.create', ['id' => $query->id]) . '>' . $query->title . '</a>';
-                } else {
-                    $link = $query->title;
-                }
+                $link = '<a class="btn-link btn-link-hover" href=' . route('user_plans.create', ['id' => $query->id]) . '>' . $query->title . '</a>';
                 return $link;
             })
 
@@ -111,9 +107,6 @@ class UserPlanController extends Controller
      */
     public function create(Request $request)
     {
-        if (!auth()->user()->can('user_plan add')) {
-            return redirect()->back()->withErrors(trans('messages.demo_permission_denied'));
-        }
         $id = $request->id;
         $auth_user = authSession();
 
