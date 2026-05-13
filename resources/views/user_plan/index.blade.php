@@ -13,7 +13,7 @@
                             <h5 class="fw-bold">{{ $pageTitle ?? trans('messages.list_form_title', ['form' => trans('messages.user_plan')]) }}</h5>
                             <a href="{{ route('user_plans.create') }}" class=" float-end me-1 btn btn-sm btn-primary"><i
                                     class="fa fa-plus-circle"></i>
-                                {{ trans('messages.add_button_form', ['form' => trans('messages.user_plan')]) }}
+                                {{ trans('messages.add_button_form', ['form' => trans('User Plan')]) }}
                             </a>
                         </div>
                     </div>
