@@ -1281,8 +1281,7 @@
         </clipPath>
     </defs>
 </svg>')
-->nickname('user_plan')
-->data('permission', 'user_plan list');
+->nickname('user_plan');
 
             $menu
                 ->add(

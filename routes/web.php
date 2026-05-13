@@ -555,12 +555,10 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
         Route::post('plans/{id}', [PlanController::class, 'destroy'])->name('plans.destroy');
     });
 
-    Route::group(['middleware' => ['permission:user_plan list']], function () {
-        Route::resource('user_plans', UserPlanController::class);
-        Route::get('user_plans-index-data', [UserPlanController::class, 'index_data'])->name('user_plans.index_data');
-        Route::post('user_plans-bulk-action', [UserPlanController::class, 'bulk_action'])->name('user_plans.bulk-action');
-        Route::post('user_plans/{id}', [UserPlanController::class, 'destroy'])->name('user_plans.destroy');
-    });
+    Route::resource('user_plans', UserPlanController::class);
+    Route::get('user_plans-index-data', [UserPlanController::class, 'index_data'])->name('user_plans.index_data');
+    Route::post('user_plans-bulk-action', [UserPlanController::class, 'bulk_action'])->name('user_plans.bulk-action');
+    Route::post('user_plans/{id}', [UserPlanController::class, 'destroy'])->name('user_plans.destroy');
 
     Route::group(['middleware' => ['permission:bank list']], function () {
         Route::resource('bank', BankController::class);
