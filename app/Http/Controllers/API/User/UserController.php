@@ -15,6 +15,7 @@ use App\Http\Resources\API\ShopResource;
 use Illuminate\Support\Facades\Password;
 use App\Models\Booking;
 use App\Models\Wallet;
+use App\Models\UserSubscription;
 use App\Models\HandymanRating;
 use App\Http\Resources\API\HandymanRatingResource;
 use App\Traits\NotificationTrait;
@@ -361,6 +362,24 @@ class UserController extends Controller
                 $success['is_subscribe'] = is_subscribed_user($user->id);
                 $success['provider_id'] = admin_id();
             }
+
+            if ($user->user_type == 'user') {
+                $activeUserSubscription = user_subscriptions_valid_query((int) $user->id, 'classified')
+                    ->with('payment')
+                    ->latest('id')
+                    ->first();
+
+                $latestUserSubscription = $activeUserSubscription ?: UserSubscription::query()
+                    ->where('user_id', $user->id)
+                    ->where('module', 'classified')
+                    ->with('payment')
+                    ->latest('id')
+                    ->first();
+
+                $success['subscription'] = $this->formatUserSubscriptionForLogin($latestUserSubscription);
+                $success['is_subscribe'] = $activeUserSubscription ? 1 : 0;
+            }
+
             if ($user->user_type == 'provider' || $user->user_type == 'user') {
                 $wallet = Wallet::where('user_id', $user->id)->first();
                 if ($wallet == null) {
@@ -386,6 +405,47 @@ class UserController extends Controller
             $message = trans('auth.failed');
             return comman_message_response($message, 406);
         }
+    }
+
+    private function formatUserSubscriptionForLogin(?UserSubscription $subscription): ?array
+    {
+        if (! $subscription) {
+            return null;
+        }
+
+        $payment = $subscription->payment;
+        $paymentMeta = null;
+        if ($payment && ! empty($payment->other_transaction_detail)) {
+            $decodedMeta = json_decode((string) $payment->other_transaction_detail, true);
+            $paymentMeta = json_last_error() === JSON_ERROR_NONE ? $decodedMeta : $payment->other_transaction_detail;
+        }
+
+        return [
+            'id' => $subscription->id,
+            'plan_id' => $subscription->plan_id,
+            'title' => $subscription->title,
+            'identifier' => $subscription->identifier,
+            'type' => $subscription->type,
+            'amount' => $subscription->amount,
+            'status' => $subscription->status,
+            'start_at' => $subscription->start_at,
+            'end_at' => $subscription->end_at,
+            'duration' => $subscription->duration,
+            'description' => $subscription->description,
+            'plan_type' => $subscription->plan_type,
+            'module' => $subscription->module,
+            'plan_limitation' => json_decode($subscription->plan_limitation ?? '', true),
+            'transaction' => $payment ? [
+                'id' => $payment->id,
+                'amount' => $payment->amount,
+                'payment_type' => $payment->payment_type,
+                'payment_status' => $payment->payment_status,
+                'txn_id' => $payment->txn_id,
+                'other_transaction_detail' => $paymentMeta,
+                'created_at' => $payment->created_at,
+                'updated_at' => $payment->updated_at,
+            ] : null,
+        ];
     }
 
     public function userList(Request $request)

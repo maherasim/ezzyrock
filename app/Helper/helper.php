@@ -1299,12 +1299,37 @@ function provider_subscriptions_valid_query(int $user_id, ?string $module = null
     return $query;
 }
 
+function user_subscriptions_valid_query(int $user_id, ?string $module = null)
+{
+    $query = \App\Models\UserSubscription::query()
+        ->where('user_id', $user_id)
+        ->where('status', config('constant.SUBSCRIPTION_STATUS.ACTIVE'))
+        ->where(function ($q) {
+            $q->whereNull('end_at')->orWhere('end_at', '>=', now());
+        });
+    if (! empty($module)) {
+        $query->where('module', $module);
+    }
+
+    return $query;
+}
+
 function get_user_active_plan($user_id, $module = null)
 {
     $get_provider_plan = provider_subscriptions_valid_query((int) $user_id, $module)->latest('id')->first();
     $activeplan = null;
     if (!empty($get_provider_plan)) {
         $activeplan = new App\Http\Resources\API\ProviderSubscribeResource($get_provider_plan);
+    }
+    return $activeplan;
+}
+
+function get_customer_active_plan($user_id, $module = null)
+{
+    $get_user_plan = user_subscriptions_valid_query((int) $user_id, $module)->latest('id')->first();
+    $activeplan = null;
+    if (!empty($get_user_plan)) {
+        $activeplan = new App\Http\Resources\API\ProviderSubscribeResource($get_user_plan);
     }
     return $activeplan;
 }
@@ -1432,14 +1457,23 @@ function get_provider_plan_limit($provider_id, $type)
         $module = 'classified';
     }
 
-    if (is_any_plan_active($provider_id, $module) == 1) {
+    $isUserSubscriptionModule = $module === 'classified';
+    $hasActivePlan = $isUserSubscriptionModule
+        ? user_subscriptions_valid_query((int) $provider_id, $module)->exists()
+        : is_any_plan_active($provider_id, $module) == 1;
+
+    if ($hasActivePlan) {
         $exceed = '';
-        $get_current_plan = get_user_active_plan($provider_id, $module);
+        $get_current_plan = $isUserSubscriptionModule
+            ? get_customer_active_plan($provider_id, $module)
+            : get_user_active_plan($provider_id, $module);
         // "Unlimited" plans must not enforce per-feature JSON (stale plan_limitation rows were blocking featured posts).
         $planKind = strtolower(trim((string) ($get_current_plan->plan_type ?? '')));
         $catalogPlanId = $get_current_plan->plan_id ?? null;
         if (! empty($catalogPlanId)) {
-            $catalogPlan = \App\Models\Plans::query()->find($catalogPlanId);
+            $catalogPlan = $isUserSubscriptionModule
+                ? \App\Models\UserPlan::query()->find($catalogPlanId)
+                : \App\Models\Plans::query()->find($catalogPlanId);
             if ($catalogPlan && strtolower(trim((string) ($catalogPlan->plan_type ?? ''))) === 'unlimited') {
                 $planKind = 'unlimited';
             }

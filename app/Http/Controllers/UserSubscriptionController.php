@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Plans;
 use App\Models\PaymentGateway;
-use App\Models\ProviderSubscription;
+use App\Models\UserPlan;
+use App\Models\UserSubscription;
 use App\Models\SubscriptionTransaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -27,20 +27,19 @@ class UserSubscriptionController extends Controller
         $this->ensureCustomer();
         $module = 'classified';
 
-        // Same plan catalog as admin "service" plans (Free / Basic / Premium); subscription `module` stays classified.
-        $plans = Plans::query()
+        // Customer subscriptions use the user plan catalog; subscription `module` stays classified for limits.
+        $plans = UserPlan::query()
             ->where('status', 1)
-            ->where('module', subscription_billing_plan_module())
             ->with('planlimit')
             ->orderBy('amount')
             ->get();
 
         // Same rules as plan limits: active status + not expired (end_at).
-        $activeSubscription = provider_subscriptions_valid_query((int) auth()->id(), $module)
+        $activeSubscription = user_subscriptions_valid_query((int) auth()->id(), $module)
             ->latest('id')
             ->first();
 
-        $history = ProviderSubscription::query()
+        $history = UserSubscription::query()
             ->where('user_id', auth()->id())
             ->where('module', $module)
             ->latest('id')
@@ -54,26 +53,25 @@ class UserSubscriptionController extends Controller
     {
         $this->ensureCustomer();
         $request->validate([
-            'plan_id' => 'required|integer|exists:plans,id',
+            'plan_id' => 'required|integer|exists:user_plan,id',
             'payment_method' => 'required|in:stripe,razorPay,phonepe,paypal,paystack,flutterwave',
         ]);
 
         $module = 'classified';
-        $plan = Plans::query()
-            ->where('module', subscription_billing_plan_module())
+        $plan = UserPlan::query()
             ->where('status', 1)
             ->with('planlimit')
             ->findOrFail((int) $request->plan_id);
         $paymentType = (string) $request->payment_method;
         $userId = auth()->id();
         $startAt = now()->format('Y-m-d H:i:s');
-        $activeCurrent = provider_subscriptions_valid_query($userId, $module)->latest('id')->first();
+        $activeCurrent = user_subscriptions_valid_query($userId, $module)->latest('id')->first();
         $activePlanLeftDays = $activeCurrent ? check_days_left_plan($activeCurrent, ['start_at' => $startAt]) : 0;
         $endAt = get_plan_expiration_date($startAt, (string) $plan->type, (int) $activePlanLeftDays, (int) ($plan->duration ?: 1));
         $endAt = subscription_end_at_or_fix($startAt, $endAt);
         $planLimitation = $plan->planlimit->plan_limitation ?? null;
 
-        $subscription = ProviderSubscription::query()->create([
+        $subscription = UserSubscription::query()->create([
             'plan_id' => $plan->id,
             'user_id' => $userId,
             'title' => $plan->title,
@@ -91,11 +89,11 @@ class UserSubscriptionController extends Controller
         ]);
 
         $payment = SubscriptionTransaction::query()->create([
-            'subscription_plan_id' => $subscription->id,
+            'subscription_plan_id' => null,
             'user_id' => $userId,
             'amount' => (float) $plan->amount,
             'payment_type' => $paymentType,
-            'payment_status' => $paymentType === 'cash' ? 'pending' : 'failed',
+            'payment_status' => 'pending',
         ]);
         $subscription->payment_id = $payment->id;
         $subscription->save();
@@ -195,7 +193,7 @@ class UserSubscriptionController extends Controller
 
     public function saveStripePayment(int $id)
     {
-        $subscription = ProviderSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
+        $subscription = UserSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
         $payment = SubscriptionTransaction::query()->find($subscription->payment_id);
         if (! $payment || empty($payment->other_transaction_detail)) {
             return redirect()->route('user.subscriptions.index')->withErrors(__('messages.something_wrong'));
@@ -211,7 +209,7 @@ class UserSubscriptionController extends Controller
 
     public function razorpayCheckoutPage(int $id)
     {
-        $subscription = ProviderSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
+        $subscription = UserSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
         $payment = SubscriptionTransaction::query()->findOrFail($subscription->payment_id);
         $gateway = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
         $cfg = $this->getGatewayConfig($gateway);
@@ -227,7 +225,7 @@ class UserSubscriptionController extends Controller
 
     public function verifyRazorpayPayment(Request $request, int $id): JsonResponse
     {
-        $subscription = ProviderSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
+        $subscription = UserSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
         $payment = SubscriptionTransaction::query()->findOrFail($subscription->payment_id);
         $request->validate([
             'razorpay_payment_id' => 'required|string',
@@ -251,7 +249,7 @@ class UserSubscriptionController extends Controller
 
     public function gatewayCheckoutPage(int $id)
     {
-        $subscription = ProviderSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
+        $subscription = UserSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
         $payment = SubscriptionTransaction::query()->findOrFail($subscription->payment_id);
         $paymentType = (string) ($payment->payment_type ?? '');
         abort_unless(in_array($paymentType, ['paypal', 'paystack', 'flutterwave'], true), 404);
@@ -263,7 +261,7 @@ class UserSubscriptionController extends Controller
 
     public function completeGatewayPayment(Request $request, int $id): JsonResponse
     {
-        $subscription = ProviderSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
+        $subscription = UserSubscription::query()->where('user_id', auth()->id())->findOrFail($id);
         $payment = SubscriptionTransaction::query()->findOrFail($subscription->payment_id);
         $request->validate([
             'gateway' => 'required|in:paypal,paystack,flutterwave',
@@ -286,7 +284,7 @@ class UserSubscriptionController extends Controller
     public function subscriptionPhonePeCallback(Request $request)
     {
         $subscriptionId = (int) ($request->query('subscription_id') ?? data_get($request->all(), 'data.subscription_id'));
-        $subscription = ProviderSubscription::query()->find($subscriptionId);
+        $subscription = UserSubscription::query()->find($subscriptionId);
         if (! $subscription) {
             return response()->json(['status' => false], 404);
         }
@@ -304,7 +302,7 @@ class UserSubscriptionController extends Controller
         return redirect()->route('user.subscriptions.index')->withErrors(__('messages.payment_message', ['status' => __('messages.failed')]));
     }
 
-    public function cancel(Request $request, ProviderSubscription $subscription)
+    public function cancel(Request $request, UserSubscription $subscription)
     {
         $this->ensureCustomer();
         abort_unless($subscription->user_id === auth()->id(), 403);
@@ -312,7 +310,7 @@ class UserSubscriptionController extends Controller
         $subscription->status = config('constant.SUBSCRIPTION_STATUS.CANCELED');
         $subscription->save();
 
-        $hasAnyActive = ProviderSubscription::query()
+        $hasAnyActive = UserSubscription::query()
             ->where('user_id', auth()->id())
             ->where('status', config('constant.SUBSCRIPTION_STATUS.ACTIVE'))
             ->exists();
@@ -331,10 +329,10 @@ class UserSubscriptionController extends Controller
         abort_unless(auth()->user()->user_type === 'user', 403);
     }
 
-    private function markSubscriptionPaid(ProviderSubscription $subscription, SubscriptionTransaction $payment, string $paymentType, string $txnId): void
+    private function markSubscriptionPaid(UserSubscription $subscription, SubscriptionTransaction $payment, string $paymentType, string $txnId): void
     {
         DB::transaction(function () use ($subscription, $payment, $paymentType, $txnId) {
-            ProviderSubscription::query()
+            UserSubscription::query()
                 ->where('user_id', $subscription->user_id)
                 ->where('module', $subscription->module)
                 ->where('status', config('constant.SUBSCRIPTION_STATUS.ACTIVE'))

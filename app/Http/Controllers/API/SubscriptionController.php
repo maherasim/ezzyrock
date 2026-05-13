@@ -11,6 +11,7 @@ use App\Models\UserPlan;
 use App\Models\PaymentGateway;
 use App\Models\ProviderSubscription;
 use App\Models\SubscriptionTransaction;
+use App\Models\UserSubscription;
 use App\Models\User;
 use App\Http\Resources\API\PlanResource;
 use App\Http\Resources\API\PaymentGatewayResource;
@@ -187,13 +188,13 @@ class SubscriptionController extends Controller
         $paymentType = (string) $request->payment_method;
         $userId = auth()->id();
         $startAt = now()->format('Y-m-d H:i:s');
-        $activeCurrent = provider_subscriptions_valid_query($userId, $module)->latest('id')->first();
+        $activeCurrent = user_subscriptions_valid_query($userId, $module)->latest('id')->first();
         $activePlanLeftDays = $activeCurrent ? check_days_left_plan($activeCurrent, ['start_at' => $startAt]) : 0;
         $endAt = get_plan_expiration_date($startAt, (string) $plan->type, (int) $activePlanLeftDays, (int) ($plan->duration ?: 1));
         $endAt = subscription_end_at_or_fix($startAt, $endAt);
         $planLimitation = $plan->planlimit->plan_limitation ?? null;
 
-        $subscription = ProviderSubscription::query()->create([
+        $subscription = UserSubscription::query()->create([
             'plan_id' => $plan->id,
             'user_id' => $userId,
             'title' => $plan->title,
@@ -211,7 +212,7 @@ class SubscriptionController extends Controller
         ]);
 
         $payment = SubscriptionTransaction::query()->create([
-            'subscription_plan_id' => $subscription->id,
+            'subscription_plan_id' => null,
             'user_id' => $userId,
             'amount' => (float) $plan->amount,
             'payment_type' => $paymentType,
@@ -222,7 +223,7 @@ class SubscriptionController extends Controller
         $subscription->save();
 
         if ((float) $plan->amount <= 0) {
-            $this->markSubscriptionPaid($subscription, $payment, 'free', 'free-' . $subscription->id);
+            $this->markUserSubscriptionPaid($subscription, $payment, 'free', 'free-' . $subscription->id);
             return comman_custom_response([
                 'status' => true,
                 'message' => __('messages.subscription_added'),
@@ -342,6 +343,29 @@ class SubscriptionController extends Controller
     {
         DB::transaction(function () use ($subscription, $payment, $paymentType, $txnId) {
             ProviderSubscription::query()
+                ->where('user_id', $subscription->user_id)
+                ->where('module', $subscription->module)
+                ->where('status', config('constant.SUBSCRIPTION_STATUS.ACTIVE'))
+                ->where('id', '!=', $subscription->id)
+                ->update(['status' => config('constant.SUBSCRIPTION_STATUS.INACTIVE')]);
+
+            $payment->payment_type = $paymentType;
+            $payment->payment_status = 'paid';
+            $payment->txn_id = $txnId;
+            $payment->save();
+
+            $subscription->status = config('constant.SUBSCRIPTION_STATUS.ACTIVE');
+            $subscription->payment_id = $payment->id;
+            $subscription->save();
+
+            User::query()->where('id', $subscription->user_id)->update(['is_subscribe' => 1]);
+        });
+    }
+
+    private function markUserSubscriptionPaid(UserSubscription $subscription, SubscriptionTransaction $payment, string $paymentType, string $txnId): void
+    {
+        DB::transaction(function () use ($subscription, $payment, $paymentType, $txnId) {
+            UserSubscription::query()
                 ->where('user_id', $subscription->user_id)
                 ->where('module', $subscription->module)
                 ->where('status', config('constant.SUBSCRIPTION_STATUS.ACTIVE'))
