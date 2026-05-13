@@ -174,14 +174,13 @@ class SubscriptionController extends Controller
     public function subscriptionCheckout(Request $request)
     {
         $request->validate([
-            'plan_id' => 'required|integer|exists:plans,id',
+            'plan_id' => 'required|integer|exists:user_plan,id',
             'payment_method' => 'required|in:stripe,razorPay,phonepe,paypal,paystack,flutterwave',
         ]);
 
         $module = 'classified'; // User subscriptions use classified module
-        $plan = Plans::query()
+        $plan = UserPlan::query()
             ->where('status', 1)
-            ->where('module', subscription_billing_plan_module())
             ->with('planlimit')
             ->findOrFail((int) $request->plan_id);
 
