@@ -25,6 +25,7 @@ return new class extends Migration
             $table->string('plan_type')->nullable();
             $table->string('module', 32)->default('classified');
             $table->bigInteger('trial_period')->nullable();
+            $table->unsignedInteger('free_posts')->default(0);
             $table->timestamps();
         });
     }

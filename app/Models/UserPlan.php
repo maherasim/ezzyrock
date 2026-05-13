@@ -10,12 +10,13 @@ class UserPlan extends Model
     use HasFactory;
     protected $table = 'user_plan';
     protected $fillable = [
-        'title', 'identifier', 'playstore_identifier','appstore_identifier','type', 'amount','status','duration','description','trial_period','plan_type','module'
+        'title', 'identifier', 'playstore_identifier','appstore_identifier','type', 'amount','status','duration','description','trial_period','free_posts','plan_type','module'
     ];
     protected $casts = [
         'amount'    => 'double',
         'status'    => 'integer',
         'trial_period'    => 'integer',
+        'free_posts'    => 'integer',
     ];
     public function planlimit(){
         return $this->belongsTo(UserPlanLimit::class,'id', 'plan_id');

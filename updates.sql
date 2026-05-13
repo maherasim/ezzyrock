@@ -25,3 +25,6 @@ CREATE TABLE IF NOT EXISTS `user_subscriptions` (
   CONSTRAINT `user_subscriptions_plan_id_foreign`
     FOREIGN KEY (`plan_id`) REFERENCES `user_plan` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `user_plan`
+  ADD COLUMN `free_posts` int unsigned NOT NULL DEFAULT 0 AFTER `trial_period`;

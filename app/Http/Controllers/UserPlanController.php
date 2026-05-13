@@ -156,6 +156,7 @@ class UserPlanController extends Controller
             'duration' => $requestData['duration'],
             'description' => $requestData['description'],
             'plan_type' => $requestData['plan_type'],
+            'free_posts' => $requestData['free_posts'] ?? 0,
             'type' => $requestData['type'],
             'playstore_identifier' => $requestData['playstore_identifier'] ?? null,
             'appstore_identifier' => $requestData['appstore_identifier'] ?? null,

@@ -29,6 +29,7 @@ class UserPlanRequest extends FormRequest
             'amount' => 'required|numeric|min:0',
             'status' => 'required',
             'duration' => 'required',
+            'free_posts' => 'nullable|integer|min:0',
         ];
 
         if ($this->has('id') && !empty($this->id)) {

@@ -45,6 +45,11 @@
                             </div>
 
                             <div class="form-group col-md-4">
+                                {{ html()->label('Free Posts Limit', 'free_posts')->class('form-control-label') }}
+                                {{ html()->number('free_posts', $plan->free_posts ?? 0)->placeholder('Free Posts Limit')->class('form-control')->attribute('min', 0)->attribute('step', 1) }}
+                            </div>
+
+                            <div class="form-group col-md-4">
                                 {{ html()->label(trans('messages.plan_limitation') . ' <span class="text-danger">*</span>', 'plan_type')->class('form-control-label') }}
                                 <select class="form-select select2js" id="plan_limitation" name="plan_type">
                                     @foreach($plan_type as $value)

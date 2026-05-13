@@ -15,6 +15,7 @@ use App\Http\Resources\API\ShopResource;
 use Illuminate\Support\Facades\Password;
 use App\Models\Booking;
 use App\Models\Wallet;
+use App\Models\UserPlan;
 use App\Models\UserSubscription;
 use App\Models\HandymanRating;
 use App\Http\Resources\API\HandymanRatingResource;
@@ -364,7 +365,7 @@ class UserController extends Controller
             }
 
             if ($user->user_type == 'user') {
-                $activeUserSubscription = user_subscriptions_valid_query((int) $user->id, 'classified')
+                $activeUserSubscription = user_subscriptions_valid_query((int) $user->id)
                     ->with('payment')
                     ->latest('id')
                     ->first();
@@ -388,6 +389,7 @@ class UserController extends Controller
                 $success['subscription'] = $formattedUserSubscription;
                 $success['user_subscription'] = $formattedUserSubscription;
                 $success['is_subscribe'] = $activeUserSubscription ? 1 : 0;
+                $success['free_posts'] = $this->getFreePostsLimitForLogin();
             }
 
             if ($user->user_type == 'provider' || $user->user_type == 'user') {
@@ -456,6 +458,22 @@ class UserController extends Controller
                 'updated_at' => $payment->updated_at,
             ] : null,
         ];
+    }
+
+    private function getFreePostsLimitForLogin(): int
+    {
+        $freePlan = UserPlan::query()
+            ->where('status', 1)
+            ->where(function ($query) {
+                $query->where('plan_type', 'free')
+                    ->orWhere('identifier', 'free')
+                    ->orWhere('amount', 0);
+            })
+            ->orderBy('amount')
+            ->orderBy('id')
+            ->first();
+
+        return (int) ($freePlan->free_posts ?? 0);
     }
 
     public function userList(Request $request)
