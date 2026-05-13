@@ -1281,7 +1281,9 @@
         </clipPath>
     </defs>
 </svg>')
-->nickname('plan1')
+->nickname('plan')->data('permission', 'plan list');
+        }
+
  
 
 
