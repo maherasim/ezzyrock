@@ -5,7 +5,7 @@
                 <div class="card card-block card-stretch">
                     <div class="card-body p-0">
                         <div class="d-flex justify-content-between align-items-center p-3 flex-wrap gap-3">
-                            <h5 class="fw-bold">{{ $pageTitle ?? trans('messages.add_form_title', ['form' => trans('User Plan')]) }}</h5>
+                            <h5 class="fw-bold">{{ $pageTitle ?? trans('messages.add_form_title', ['form' => trans('messages.user_plan')]) }}</h5>
                             <a href="{{ route('user_plans.index') }}" class=" float-end btn btn-sm btn-primary"><i class="fa fa-angle-double-left"></i> {{ __('messages.back') }}</a>
                         </div>
                     </div>
@@ -105,7 +105,7 @@
                             </div>
                         </div>
 
-                        {{ html()->submit(trans('messages.save_form', ['form' => trans('User Plan')]))->class('btn btn-md btn-primary float-end') }}
+                        {{ html()->submit(trans('messages.save_form', ['form' => trans('messages.user_plan')]))->class('btn btn-md btn-primary float-end') }}
                         {{ html()->form()->close() }}
                     </div>
                 </div>
