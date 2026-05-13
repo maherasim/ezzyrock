@@ -5,7 +5,7 @@
                 <div class="card card-block card-stretch">
                     <div class="card-body p-0">
                         <div class="d-flex justify-content-between align-items-center p-3 flex-wrap gap-3">
-                            <h5 class="fw-bold">{{ $pageTitle ?? trans('messages.list') }}</h5>
+                            <h5 class="fw-bold">{{ $pageTitle ?? trans('messages.add_form_title', ['form' => trans('messages.user_plan')]) }}</h5>
                             <a href="{{ route('user_plans.index') }}" class=" float-end btn btn-sm btn-primary"><i class="fa fa-angle-double-left"></i> {{ __('messages.back') }}</a>
                         </div>
                     </div>
@@ -48,7 +48,7 @@
                                 {{ html()->label(trans('messages.plan_limitation') . ' <span class="text-danger">*</span>', 'plan_type')->class('form-control-label') }}
                                 <select class="form-select select2js" id="plan_limitation" name="plan_type">
                                     @foreach($plan_type as $value)
-                                        <option value="{{ $value->value }}" data-type="{{ $value->value }}" {{ ($plan->plan_type ?? '') == $value->value ? 'selected' : '' }}>{{ $value->label }}</option>
+                                        <option value="{{ $value->value }}" data-type="{{ $value->value }}" {{ ($plan->plan_type ?? 'limited') == $value->value ? 'selected' : '' }}>{{ $value->label }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -105,7 +105,7 @@
                             </div>
                         </div>
 
-                        {{ html()->submit(__('messages.save'))->class('btn btn-md btn-primary float-end') }}
+                        {{ html()->submit(trans('messages.save_form', ['form' => trans('messages.user_plan')]))->class('btn btn-md btn-primary float-end') }}
                         {{ html()->form()->close() }}
                     </div>
                 </div>
