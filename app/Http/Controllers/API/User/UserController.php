@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Service;
 use App\Models\Shop;
+use App\Models\Post;
 use App\Http\Requests\UserRequest;
 use Hash;
 use App\Http\Resources\API\UserResource;
@@ -449,6 +450,7 @@ class UserController extends Controller
             'module' => $subscription->module,
             'posts_limit' => $this->extractPlanLimitValue($planLimitation, 'classified'),
             'featured_posts_limit' => $this->extractPlanLimitValue($planLimitation, 'featured_classified'),
+            'featured_posts_used_count' => $this->getFeaturedPostsUsedCount((int) $subscription->user_id),
             'plan_limitation' => $planLimitation,
             'transaction' => $payment ? [
                 'id' => $payment->id,
@@ -493,6 +495,20 @@ class UserController extends Controller
         $limit = $planLimitation[$key]['limit'] ?? null;
 
         return $limit === null || $limit === '' ? null : (int) $limit;
+    }
+
+    private function getFeaturedPostsUsedCount(int $userId): int
+    {
+        if ($userId <= 0) {
+            return 0;
+        }
+
+        return Post::query()
+            ->where('provider_id', $userId)
+            ->where('service_type', 'classified')
+            ->where('is_featured', 1)
+            ->where('status', 1)
+            ->count();
     }
 
     private function getFreePostsLimitForLogin(): int
