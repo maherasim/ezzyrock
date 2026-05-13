@@ -462,18 +462,9 @@ class UserController extends Controller
 
     private function getFreePostsLimitForLogin(): int
     {
-        $freePlan = UserPlan::query()
+        return (int) UserPlan::query()
             ->where('status', 1)
-            ->where(function ($query) {
-                $query->where('plan_type', 'free')
-                    ->orWhere('identifier', 'free')
-                    ->orWhere('amount', 0);
-            })
-            ->orderBy('amount')
-            ->orderBy('id')
-            ->first();
-
-        return (int) ($freePlan->free_posts ?? 0);
+            ->max('free_posts');
     }
 
     public function userList(Request $request)
