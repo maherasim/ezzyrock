@@ -10,10 +10,10 @@
                 <div class="card card-block card-stretch">
                     <div class="card-body p-0">
                         <div class="d-flex justify-content-between align-items-center p-3 flex-wrap gap-3">
-                            <h5 class="fw-bold">{{ $pageTitle ?? trans('messages.list_form_title', ['form' => trans('messages.user_plan')]) }}</h5>
+                            <h5 class="fw-bold">{{ $pageTitle ?? trans('messages.list_form_title', ['form' => trans('User Plan')]) }}</h5>
                             <a href="{{ route('user_plans.create') }}" class=" float-end me-1 btn btn-sm btn-primary"><i
                                     class="fa fa-plus-circle"></i>
-                                {{ trans('messages.add_button_form', ['form' => trans('messages.user_plan')]) }}
+                                {{ trans('messages.add_button_form', ['form' => trans('User Plan')]) }}
                             </a>
                         </div>
                     </div>
@@ -45,8 +45,8 @@
                             </div>
                             <button id="quick-action-apply" class="btn btn-primary" data-ajax="true"
                                 data--submit="{{ route('user_plans.bulk-action') }}" data-datatable="reload"
-                                data-confirmation='true' data-title="{{ trans('messages.user_plans', ['form' => trans('messages.user_plans')]) }}"
-                                title="{{ trans('messages.user_plans', ['form' => trans('messages.user_plans')]) }}"
+                                data-confirmation='true' data-title="{{ trans('User plan', ['form' => trans('User Plan')]) }}"
+                                title="{{ trans('User plan', ['form' => trans('User plan')]) }}"
                                 data-message='{{ trans('messages.do_you_want_to_perform_this_action') }}'
                                 disabled>{{ __('messages.apply') }}</button>
                     </div>

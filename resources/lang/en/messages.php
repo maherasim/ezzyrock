@@ -134,6 +134,8 @@
     'account_setting' => 'Account Setting',
     'app_setting' => 'App Setting',
     'user_setting' => 'User Setting',
+    'user_plan' => 'User Plan',
+    'user_plans' => 'User Plans',
     'login_success' => 'You have successfully logged in.',
     'dashboard_no' => 'Dashboard :No',
     'main' => 'Main',
