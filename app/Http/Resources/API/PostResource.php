@@ -32,6 +32,17 @@ class PostResource extends JsonResource
             'city_id' => optional($this->providers)->city_id,
             'category_name' => $this->getTranslation(optional($this->category)->translations, $headerValue, 'name', optional($this->category)->name ?? null) ?? optional($this->category)->name,
             'subcategory_name' => $this->getTranslation(optional($this->subcategory)->translations, $headerValue, 'name', optional($this->subcategory)->name ?? null) ?? optional($this->subcategory)->name,
+            'service_zones' => $this->whenLoaded('zones', function () {
+                return $this->zones->map(function ($zone) {
+                    return [
+                        'id' => $zone->id,
+                        'name' => $zone->name,
+                    ];
+                })->values();
+            }),
+            'service_zone_ids' => $this->whenLoaded('zones', function () {
+                return $this->zones->pluck('id')->values();
+            }),
             'attchments' => getAttachments($this->getMedia('post_attachment')),
             'attchments_array' => getAttachmentArray($this->getMedia('post_attachment'), null),
             'service_type' => $this->service_type,

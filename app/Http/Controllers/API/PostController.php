@@ -251,6 +251,7 @@ class PostController extends Controller
 
     public function getPostFormConfig(Request $request)
     {
+        $userId = auth()->id();
         $categories = Category::query()
             ->where('module_type', 'classified')
             ->where('status', 1)
@@ -272,12 +273,30 @@ class PostController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $post = null;
+        $postId = $request->post_id ?? $request->id;
+        if (! empty($postId)) {
+            $post = Post::query()
+                ->where('provider_id', $userId)
+                ->where('service_type', 'classified')
+                ->with(['providers', 'category', 'subcategory', 'translations', 'zones'])
+                ->find($postId);
+
+            if (! $post) {
+                return response()->json([
+                    'status' => false,
+                    'message' => __('messages.record_not_found'),
+                ], 404);
+            }
+        }
+
         return response()->json([
             'status' => true,
             'data' => [
                 'categories' => \App\Http\Resources\API\CategoryResource::collection($categories),
                 'subcategories' => \App\Http\Resources\API\SubCategoryResource::collection($subcategories),
                 'zones' => $zones,
+                'post' => $post ? new \App\Http\Resources\API\PostResource($post) : null,
             ]
         ]);
     }
