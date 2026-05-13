@@ -391,6 +391,7 @@ class UserController extends Controller
                 $success['user_subscription'] = $formattedUserSubscription;
                 $success['is_subscribe'] = $activeUserSubscription ? 1 : 0;
                 $success['free_posts'] = $this->getFreePostsLimitForLogin();
+                $success['featured_posts_used_count'] = $this->getFeaturedPostsUsedCount((int) $user->id);
             }
 
             if ($user->user_type == 'provider' || $user->user_type == 'user') {
@@ -450,7 +451,6 @@ class UserController extends Controller
             'module' => $subscription->module,
             'posts_limit' => $this->extractPlanLimitValue($planLimitation, 'classified'),
             'featured_posts_limit' => $this->extractPlanLimitValue($planLimitation, 'featured_classified'),
-            'featured_posts_used_count' => $this->getFeaturedPostsUsedCount((int) $subscription->user_id),
             'plan_limitation' => $planLimitation,
             'transaction' => $payment ? [
                 'id' => $payment->id,
