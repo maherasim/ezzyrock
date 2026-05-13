@@ -4,12 +4,21 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use App\Models\Plans;
+use App\Models\PaymentGateway;
 use App\Models\ProviderSubscription;
-use App\Models\User;
 use App\Models\SubscriptionTransaction;
+use App\Models\User;
+use App\Http\Resources\API\PlanResource;
+use App\Http\Resources\API\PaymentGatewayResource;
 use App\Http\Resources\API\ProviderSubscribeResource;
 use App\Http\Requests\ProviderSubscriptionRequest;
 use App\Traits\NotificationTrait;
+use Razorpay\Api\Api as RazorpayApi;
+use Stripe\StripeClient;
 
 class SubscriptionController extends Controller
 {
@@ -145,6 +154,253 @@ class SubscriptionController extends Controller
 
         return comman_custom_response($response);
 
+    }
+
+    public function subscriptionConfig(Request $request)
+    {
+        $module = subscription_billing_plan_module();
+        $plansQuery = Plans::query()->where('status', 1)->where('module', $module);
+        $hasAnyPlan = ProviderSubscription::where('user_id', auth()->id())->exists();
+        if ($hasAnyPlan) {
+            $plansQuery->whereNotIn('identifier', ['free']);
+        }
+
+        $plans = $plansQuery->orderBy('amount')->get();
+        $gateways = PaymentGateway::query()
+            ->where('status', 1)
+            ->whereIn('type', ['stripe', 'razorPay', 'phonepe', 'paypal', 'paystack', 'flutterwave'])
+            ->get();
+
+        $activeSubscription = provider_subscriptions_valid_query(auth()->id(), $module)
+            ->latest('id')
+            ->first();
+
+        $history = ProviderSubscription::query()
+            ->where('user_id', auth()->id())
+            ->where('module', $module)
+            ->latest('id')
+            ->limit(20)
+            ->get();
+
+        return comman_custom_response([
+            'plans' => PlanResource::collection($plans),
+            'payment_methods' => PaymentGatewayResource::collection($gateways),
+            'active_subscription' => $activeSubscription ? new ProviderSubscribeResource($activeSubscription) : null,
+            'history' => ProviderSubscribeResource::collection($history),
+        ]);
+    }
+
+    public function subscriptionCheckout(Request $request)
+    {
+        $request->validate([
+            'plan_id' => 'required|integer|exists:plans,id',
+            'payment_method' => 'required|in:stripe,razorPay,phonepe,paypal,paystack,flutterwave',
+        ]);
+
+        $module = subscription_billing_plan_module();
+        $plan = Plans::query()
+            ->where('status', 1)
+            ->where('module', $module)
+            ->with('planlimit')
+            ->findOrFail((int) $request->plan_id);
+
+        $paymentType = (string) $request->payment_method;
+        $userId = auth()->id();
+        $startAt = now()->format('Y-m-d H:i:s');
+        $activeCurrent = provider_subscriptions_valid_query($userId, $module)->latest('id')->first();
+        $activePlanLeftDays = $activeCurrent ? check_days_left_plan($activeCurrent, ['start_at' => $startAt]) : 0;
+        $endAt = get_plan_expiration_date($startAt, (string) $plan->type, (int) $activePlanLeftDays, (int) ($plan->duration ?: 1));
+        $endAt = subscription_end_at_or_fix($startAt, $endAt);
+        $planLimitation = $plan->planlimit->plan_limitation ?? null;
+
+        $subscription = ProviderSubscription::query()->create([
+            'plan_id' => $plan->id,
+            'user_id' => $userId,
+            'title' => $plan->title,
+            'identifier' => $plan->identifier,
+            'type' => $plan->type,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+            'amount' => (float) $plan->amount,
+            'status' => config('constant.SUBSCRIPTION_STATUS.PENDING'),
+            'plan_limitation' => is_array($planLimitation) ? json_encode($planLimitation) : $planLimitation,
+            'duration' => (int) ($plan->duration ?: 1),
+            'description' => $plan->description,
+            'plan_type' => $plan->plan_type,
+            'module' => $module,
+        ]);
+
+        $payment = SubscriptionTransaction::query()->create([
+            'subscription_plan_id' => $subscription->id,
+            'user_id' => $userId,
+            'amount' => (float) $plan->amount,
+            'payment_type' => $paymentType,
+            'payment_status' => 'pending',
+        ]);
+
+        $subscription->payment_id = $payment->id;
+        $subscription->save();
+
+        if ((float) $plan->amount <= 0) {
+            $this->markSubscriptionPaid($subscription, $payment, 'free', 'free-' . $subscription->id);
+            return comman_custom_response([
+                'status' => true,
+                'message' => __('messages.subscription_added'),
+                'subscription' => new ProviderSubscribeResource($subscription),
+            ]);
+        }
+
+        if ($paymentType === 'razorPay') {
+            $razorpay = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
+            $cfg = $this->getGatewayConfig($razorpay);
+            if (empty($cfg['razor_key']) || empty($cfg['razor_secret'])) {
+                return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
+            }
+            $api = new RazorpayApi($cfg['razor_key'], $cfg['razor_secret']);
+            $rzOrder = $api->order->create([
+                'receipt' => 'SUB-' . $subscription->id,
+                'amount' => (int) round(((float) $subscription->amount) * 100),
+                'currency' => 'INR',
+            ]);
+            $payment->other_transaction_detail = json_encode(['razorpay_order_id' => (string) $rzOrder['id']]);
+            $payment->save();
+
+            return comman_custom_response([
+                'status' => true,
+                'checkout_url' => route('user.subscription.razorpay.checkout', $subscription->id),
+                'payment_type' => $paymentType,
+                'subscription' => new ProviderSubscribeResource($subscription),
+            ]);
+        }
+
+        if ($paymentType === 'phonepe') {
+            $phonepe = PaymentGateway::query()->where('type', 'phonepe')->where('status', 1)->first();
+            $cfg = $this->getGatewayConfig($phonepe);
+            if (empty($cfg['merchant_id']) || empty($cfg['salt_key'])) {
+                return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
+            }
+            $apiPath = '/pg/v1/pay';
+            $merchantTransactionId = 'SUBPP' . time() . $subscription->id;
+            $payload = [
+                'merchantId' => $cfg['merchant_id'],
+                'merchantTransactionId' => $merchantTransactionId,
+                'amount' => (int) round(((float) $subscription->amount) * 100),
+                'redirectUrl' => url('/api/subscription-phonepe/callback?subscription_id=' . $subscription->id),
+                'redirectMode' => 'POST',
+                'callbackUrl' => url('/api/subscription-phonepe/callback?subscription_id=' . $subscription->id),
+                'paymentInstrument' => ['type' => 'PAY_PAGE'],
+            ];
+            $encoded = base64_encode(json_encode($payload));
+            $checksum = $this->generatePhonePeChecksum($encoded, $apiPath, (string) $cfg['salt_key'], (string) ($cfg['salt_index'] ?? 1));
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+                'X-VERIFY' => $checksum,
+                'X-MERCHANT-ID' => (string) $cfg['merchant_id'],
+            ])->post($this->getPhonePeBaseUrl((int) ($phonepe->is_test ?? 1)) . $apiPath, ['request' => $encoded]);
+            $json = $response->json();
+            $payUrl = data_get($json, 'data.instrumentResponse.redirectInfo.url');
+            if (! $response->successful() || empty($payUrl)) {
+                Log::error('Subscription PhonePe initiate failed', ['response' => $json]);
+                return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
+            }
+            $payment->other_transaction_detail = json_encode(['merchant_transaction_id' => $merchantTransactionId]);
+            $payment->save();
+
+            return comman_custom_response([
+                'status' => true,
+                'checkout_url' => $payUrl,
+                'payment_type' => $paymentType,
+                'subscription' => new ProviderSubscribeResource($subscription),
+            ]);
+        }
+
+        if (in_array($paymentType, ['paypal', 'paystack', 'flutterwave'], true)) {
+            return comman_custom_response([
+                'status' => true,
+                'checkout_url' => route('user.subscription.gateway.checkout', $subscription->id),
+                'payment_type' => $paymentType,
+                'subscription' => new ProviderSubscribeResource($subscription),
+            ]);
+        }
+
+        $stripeData = getPaymentMethodkey('stripe');
+        $stripeSecret = is_array($stripeData) ? ($stripeData['stripe_key'] ?? null) : null;
+        if (empty($stripeSecret)) {
+            return response()->json(['status' => false, 'message' => __('messages.stripe_details')], 422);
+        }
+
+        $stripe = new StripeClient($stripeSecret);
+        $checkoutSession = $stripe->checkout->sessions->create([
+            'success_url' => url('/save-subscription-stripe-payment/' . $subscription->id),
+            'cancel_url' => route('user.subscriptions.index'),
+            'payment_method_types' => ['card'],
+            'billing_address_collection' => 'required',
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => 'inr',
+                    'product_data' => ['name' => 'Subscription ' . $subscription->title],
+                    'unit_amount' => (int) round(((float) $subscription->amount) * 100),
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'payment',
+        ]);
+
+        $payment->other_transaction_detail = (string) $checkoutSession->id;
+        $payment->save();
+
+        return comman_custom_response([
+            'status' => true,
+            'checkout_url' => $checkoutSession->url,
+            'payment_type' => $paymentType,
+            'session_id' => $checkoutSession->id,
+            'subscription' => new ProviderSubscribeResource($subscription),
+        ]);
+    }
+
+    private function markSubscriptionPaid(ProviderSubscription $subscription, SubscriptionTransaction $payment, string $paymentType, string $txnId): void
+    {
+        DB::transaction(function () use ($subscription, $payment, $paymentType, $txnId) {
+            ProviderSubscription::query()
+                ->where('user_id', $subscription->user_id)
+                ->where('module', $subscription->module)
+                ->where('status', config('constant.SUBSCRIPTION_STATUS.ACTIVE'))
+                ->where('id', '!=', $subscription->id)
+                ->update(['status' => config('constant.SUBSCRIPTION_STATUS.INACTIVE')]);
+
+            $payment->payment_type = $paymentType;
+            $payment->payment_status = 'paid';
+            $payment->txn_id = $txnId;
+            $payment->save();
+
+            $subscription->status = config('constant.SUBSCRIPTION_STATUS.ACTIVE');
+            $subscription->payment_id = $payment->id;
+            $subscription->save();
+
+            User::query()->where('id', $subscription->user_id)->update(['is_subscribe' => 1]);
+        });
+    }
+
+    private function getGatewayConfig(?PaymentGateway $gateway): array
+    {
+        if (! $gateway) {
+            return [];
+        }
+        $payload = $gateway->is_test == 1 ? $gateway->value : $gateway->live_value;
+        return json_decode((string) $payload, true) ?? [];
+    }
+
+    private function generatePhonePeChecksum(string $payload, string $apiPath, string $saltKey, string $saltIndex = '1'): string
+    {
+        $hash = hash('sha256', $payload . $apiPath . $saltKey);
+        return $hash . '###' . $saltIndex;
+    }
+
+    private function getPhonePeBaseUrl(int $isTest): string
+    {
+        return $isTest === 0
+            ? 'https://api.phonepe.com/apis/pg'
+            : 'https://api-preprod.phonepe.com/apis/pg-sandbox';
     }
 
     // public function providerSubscriptionDetail($id){
