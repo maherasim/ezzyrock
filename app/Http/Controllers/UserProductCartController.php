@@ -409,6 +409,8 @@ class UserProductCartController extends Controller
                     $order->other_transaction_detail = json_encode([
                         'gateway' => 'razorPay',
                         'razorpay_order_id' => (string) $razorOrder['id'],
+                        'razorpay_is_test' => (int) $razorpay->is_test,
+                        'razorpay_key' => (string) $razorKey,
                     ]);
                     $order->save();
                 }
@@ -567,18 +569,19 @@ class UserProductCartController extends Controller
         if (! $gateway) {
             return redirect()->route('user.product-order.show', $order)->withErrors(__('messages.something_wrong'));
         }
-        $gatewayData = $this->getGatewayConfig($gateway);
-        $razorKey = $gatewayData['razor_key'] ?? null;
-        if (empty($razorKey)) {
-            return redirect()->route('user.product-order.show', $order)->withErrors(__('messages.something_wrong'));
-        }
         $meta = json_decode((string) ($order->other_transaction_detail ?? '{}'), true);
         $razorOrderId = $meta['razorpay_order_id'] ?? null;
         if (empty($razorOrderId)) {
             return redirect()->route('user.product-order.show', $order)->withErrors(__('messages.something_wrong'));
         }
+        $gatewayData = $this->getGatewayConfig($gateway, $meta['razorpay_is_test'] ?? null);
+        $razorKey = $meta['razorpay_key'] ?? ($gatewayData['razor_key'] ?? null);
+        if (empty($razorKey)) {
+            return redirect()->route('user.product-order.show', $order)->withErrors(__('messages.something_wrong'));
+        }
+        $currencyCode = $this->getCurrencyCode();
 
-        return view('landing-page.product-razorpay-checkout', compact('order', 'razorKey', 'razorOrderId'));
+        return view('landing-page.product-razorpay-checkout', compact('order', 'razorKey', 'razorOrderId', 'currencyCode'));
     }
 
     public function verifyRazorpayPayment(Request $request, int $id)
@@ -594,13 +597,12 @@ class UserProductCartController extends Controller
         if (! $gateway) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
         }
-        $gatewayData = $this->getGatewayConfig($gateway);
+        $meta = json_decode((string) ($order->other_transaction_detail ?? '{}'), true);
+        $gatewayData = $this->getGatewayConfig($gateway, $meta['razorpay_is_test'] ?? null);
         $razorSecret = $gatewayData['razor_secret'] ?? null;
         if (empty($razorSecret)) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
         }
-
-        $meta = json_decode((string) ($order->other_transaction_detail ?? '{}'), true);
         if (($meta['razorpay_order_id'] ?? '') !== (string) $request->razorpay_order_id) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
         }
@@ -845,9 +847,10 @@ class UserProductCartController extends Controller
             : 'https://api-preprod.phonepe.com/apis/pg-sandbox';
     }
 
-    private function getGatewayConfig(PaymentGateway $gateway): array
+    private function getGatewayConfig(PaymentGateway $gateway, ?int $isTest = null): array
     {
-        $payload = $gateway->is_test == 1 ? $gateway->value : $gateway->live_value;
+        $useTest = $isTest ?? (int) $gateway->is_test;
+        $payload = $useTest === 1 ? $gateway->value : $gateway->live_value;
 
         return json_decode((string) $payload, true) ?? [];
     }

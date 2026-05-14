@@ -211,6 +211,8 @@ class ProductCartController extends Controller
                 $this->setOrderMeta($order, [
                     'gateway' => 'razorPay',
                     'razorpay_order_id' => (string) $razorOrder['id'],
+                    'razorpay_is_test' => (int) $gateway->is_test,
+                    'razorpay_key' => (string) $razorKey,
                 ]);
                 ProductCartItem::query()->where('user_id', $user->id)->delete();
 
@@ -275,13 +277,12 @@ class ProductCartController extends Controller
         if (!$gateway) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
         }
-        $gatewayData = $this->getGatewayConfig($gateway);
+        $meta = json_decode((string) ($order->other_transaction_detail ?? '{}'), true);
+        $gatewayData = $this->getGatewayConfig($gateway, $meta['razorpay_is_test'] ?? null);
         $razorSecret = $gatewayData['razor_secret'] ?? null;
         if (empty($razorSecret)) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
         }
-
-        $meta = json_decode((string) ($order->other_transaction_detail ?? '{}'), true);
         if (($meta['razorpay_order_id'] ?? '') !== (string) $validated['razorpay_order_id']) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
         }
@@ -784,9 +785,10 @@ class ProductCartController extends Controller
         return array_values(array_unique(array_merge(['wallet'], $gatewayTypes)));
     }
 
-    private function getGatewayConfig(PaymentGateway $gateway): array
+    private function getGatewayConfig(PaymentGateway $gateway, ?int $isTest = null): array
     {
-        $payload = (int) $gateway->is_test === 1 ? $gateway->value : $gateway->live_value;
+        $useTest = $isTest ?? (int) $gateway->is_test;
+        $payload = $useTest === 1 ? $gateway->value : $gateway->live_value;
 
         return json_decode((string) $payload, true) ?? [];
     }

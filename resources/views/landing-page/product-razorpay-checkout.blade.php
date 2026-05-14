@@ -17,7 +17,7 @@
         const options = {
             key: @json($razorKey),
             amount: {{ (int) round(((float) $order->total) * 100) }},
-            currency: @json('INR'),
+            currency: @json($currencyCode ?? 'INR'),
             name: @json(config('app.name')),
             description: @json('Product Order ' . $order->order_number),
             order_id: @json($razorOrderId),
@@ -61,6 +61,9 @@
         };
 
         const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function () {
+            window.location.href = @json(route('user.product-order.show', $order->id));
+        });
         rzp.open();
     })();
 </script>
