@@ -78,6 +78,10 @@
 
                         <div>
                             @foreach($plan_limit as $key => $value)
+                                @if(in_array($value->value, ['classified', 'featured_classified']))
+                                    @continue
+                                @endif
+
                                 @php
                                     $planValue = $plan->planlimit->plan_limitation ?? [];
                                     $isChecked = $planValue[$value->value]['is_checked'] ?? 'off';
