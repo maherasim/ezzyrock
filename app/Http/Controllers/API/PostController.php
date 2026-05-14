@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Post;
 use App\Models\Category;
-use App\Models\UserPlan;
+use App\Services\FeaturedPostQuotaService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 
@@ -181,11 +181,17 @@ class PostController extends Controller
 
         $per_page = $request->get('per_page', config('constant.PER_PAGE_LIMIT', 15));
         $items = $per_page === 'all' ? $query->get() : $query->paginate($per_page);
+        $quotaService = app(FeaturedPostQuotaService::class);
+        $freePostQuota = $quotaService->getFreePostQuota($userId);
+        $featuredPostQuota = $quotaService->getFeaturedQuota($userId);
 
         if ($per_page === 'all') {
             return response()->json([
                 'status' => true,
-                'allow_to_create_featured' => $this->canCreateFeaturedPost($userId) ? 'yes' : 'no',
+                'allow_to_create_post' => $freePostQuota['allow_to_create_post'] ? 'yes' : 'no',
+                'allow_to_create_featured' => $featuredPostQuota['allow_to_create_featured'] ? 'yes' : 'no',
+                'free_post_quota' => $freePostQuota,
+                'featured_post_quota' => $featuredPostQuota,
                 'data' => \App\Http\Resources\API\PostResource::collection($items),
                 'pagination' => null,
             ]);
@@ -193,7 +199,10 @@ class PostController extends Controller
 
         return response()->json([
             'status' => true,
-            'allow_to_create_featured' => $this->canCreateFeaturedPost($userId) ? 'yes' : 'no',
+            'allow_to_create_post' => $freePostQuota['allow_to_create_post'] ? 'yes' : 'no',
+            'allow_to_create_featured' => $featuredPostQuota['allow_to_create_featured'] ? 'yes' : 'no',
+            'free_post_quota' => $freePostQuota,
+            'featured_post_quota' => $featuredPostQuota,
             'data' => \App\Http\Resources\API\PostResource::collection($items),
             'pagination' => [
                 'total_items' => $items->total(),
@@ -202,51 +211,6 @@ class PostController extends Controller
                 'totalPages' => $items->lastPage(),
             ],
         ]);
-    }
-
-    private function canCreateFeaturedPost(int $userId): bool
-    {
-        $subscription = user_subscriptions_valid_query($userId)
-            ->latest('id')
-            ->first();
-
-        if (! $subscription) {
-            return false;
-        }
-
-        $planKind = strtolower(trim((string) ($subscription->plan_type ?? '')));
-        $planLimitation = json_decode($subscription->plan_limitation ?? '', true);
-
-        if ((! is_array($planLimitation) || empty($planLimitation)) && ! empty($subscription->plan_id)) {
-            $plan = UserPlan::query()->with('planlimit')->find($subscription->plan_id);
-            if ($plan) {
-                $planKind = strtolower(trim((string) ($plan->plan_type ?? $planKind)));
-                $planLimitation = $plan->planlimit->plan_limitation ?? [];
-            }
-        }
-
-        if ($planKind === 'unlimited') {
-            return true;
-        }
-
-        $featuredLimit = is_array($planLimitation) ? ($planLimitation['featured_classified'] ?? null) : null;
-        if (! is_array($featuredLimit) || ($featuredLimit['is_checked'] ?? 'off') !== 'on') {
-            return false;
-        }
-
-        $limit = $featuredLimit['limit'] ?? null;
-        if ($limit === null || $limit === '') {
-            return true;
-        }
-
-        $usedCount = Post::query()
-            ->where('provider_id', $userId)
-            ->where('service_type', 'classified')
-            ->where('is_featured', 1)
-            ->where('status', 1)
-            ->count();
-
-        return $usedCount < (int) $limit;
     }
 
     public function getPostFormConfig(Request $request)
@@ -297,6 +261,8 @@ class PostController extends Controller
                 'subcategories' => \App\Http\Resources\API\SubCategoryResource::collection($subcategories),
                 'zones' => $zones,
                 'post' => $post ? new \App\Http\Resources\API\PostResource($post) : null,
+                'free_post_quota' => app(FeaturedPostQuotaService::class)->getFreePostQuota($userId, $post ? $post->id : null),
+                'featured_post_quota' => app(FeaturedPostQuotaService::class)->getFeaturedQuota($userId, $post ? $post->id : null),
             ]
         ]);
     }
@@ -356,12 +322,41 @@ class PostController extends Controller
 
         $validated = $validator->validated();
         $isFeatured = (int) ($request->boolean('is_featured') ? 1 : 0);
+        $existingPost = null;
 
         if ($postId) {
-            $post = Post::findOrFail($postId);
-            if ($post->provider_id !== $userId) {
+            $existingPost = Post::findOrFail($postId);
+            if ($existingPost->provider_id !== $userId) {
                 return response()->json(['status' => false, 'message' => __('messages.unauthorized')], 403);
             }
+        }
+
+        $quotaService = app(FeaturedPostQuotaService::class);
+        $freePostQuota = $quotaService->getFreePostQuota($userId, $postId ? (int) $postId : null);
+        $featuredPostQuota = $quotaService->getFeaturedQuota($userId, $postId ? (int) $postId : null);
+        $needsFeaturedSlot = $isFeatured && (! $existingPost || (int) $existingPost->is_featured !== 1);
+        $needsFreePostSlot = ! $isFeatured && ! $existingPost;
+
+        if ($needsFreePostSlot && ! $freePostQuota['allow_to_create_post']) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Your free post limit is finished for this month. Please wait for next month or purchase a plan to create featured posts.',
+                'free_post_quota' => $freePostQuota,
+                'featured_post_quota' => $featuredPostQuota,
+            ], 422);
+        }
+
+        if ($needsFeaturedSlot && ! $featuredPostQuota['allow_to_create_featured']) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Please purchase a plan to create featured posts.',
+                'free_post_quota' => $freePostQuota,
+                'featured_post_quota' => $featuredPostQuota,
+            ], 422);
+        }
+
+        if ($postId) {
+            $post = $existingPost;
 
             $post->update([
                 'name' => $validated['name'],
@@ -414,7 +409,9 @@ class PostController extends Controller
         return response()->json([
             'status' => true,
             'message' => $message,
-            'data' => new \App\Http\Resources\API\PostResource($post)
+            'data' => new \App\Http\Resources\API\PostResource($post),
+            'free_post_quota' => app(FeaturedPostQuotaService::class)->getFreePostQuota($userId),
+            'featured_post_quota' => app(FeaturedPostQuotaService::class)->getFeaturedQuota($userId),
         ]);
     }
 

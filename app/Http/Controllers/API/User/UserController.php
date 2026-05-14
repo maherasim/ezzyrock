@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\API\User;
 
 use App\Http\Controllers\Controller;
+use App\Services\FeaturedPostQuotaService;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Service;
 use App\Models\Shop;
-use App\Models\Post;
 use App\Http\Requests\UserRequest;
 use Hash;
 use App\Http\Resources\API\UserResource;
@@ -16,7 +16,6 @@ use App\Http\Resources\API\ShopResource;
 use Illuminate\Support\Facades\Password;
 use App\Models\Booking;
 use App\Models\Wallet;
-use App\Models\FreePostSetting;
 use App\Models\UserPlan;
 use App\Models\UserSubscription;
 use App\Models\HandymanRating;
@@ -32,7 +31,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Artisan;
 use App\Models\Documents;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use App\Models\ProviderZoneMapping;
 use App\Traits\ZoneTrait;
 use App\Models\ServiceZoneMapping;
@@ -392,8 +390,14 @@ class UserController extends Controller
                 $success['subscription'] = $formattedUserSubscription;
                 $success['user_subscription'] = $formattedUserSubscription;
                 $success['is_subscribe'] = $activeUserSubscription ? 1 : 0;
-                $success['free_posts'] = $this->getFreePostsLimitForLogin();
-                $success['featured_posts_used_count'] = $this->getFeaturedPostsUsedCount((int) $user->id);
+                $quotaService = app(FeaturedPostQuotaService::class);
+                $freePostQuota = $quotaService->getFreePostQuota((int) $user->id);
+                $featuredPostQuota = $quotaService->getFeaturedQuota((int) $user->id);
+                $success['free_posts'] = $freePostQuota['monthly_limit'];
+                $success['free_posts_used_count'] = $freePostQuota['used_this_month'];
+                $success['featured_posts_used_count'] = $featuredPostQuota['used'];
+                $success['free_post_quota'] = $freePostQuota;
+                $success['featured_post_quota'] = $featuredPostQuota;
             }
 
             if ($user->user_type == 'provider' || $user->user_type == 'user') {
@@ -497,37 +501,6 @@ class UserController extends Controller
         $limit = $planLimitation[$key]['limit'] ?? null;
 
         return $limit === null || $limit === '' ? null : (int) $limit;
-    }
-
-    private function getFeaturedPostsUsedCount(int $userId): int
-    {
-        if ($userId <= 0) {
-            return 0;
-        }
-
-        return Post::query()
-            ->where('provider_id', $userId)
-            ->where('service_type', 'classified')
-            ->where('is_featured', 1)
-            ->where('status', 1)
-            ->count();
-    }
-
-    private function getFreePostsLimitForLogin(): int
-    {
-        $freePostSettingLimit = Schema::hasTable('free_post_settings')
-            ? FreePostSetting::query()
-                ->where('status', 1)
-                ->max('free_posts')
-            : null;
-
-        if ($freePostSettingLimit !== null) {
-            return (int) $freePostSettingLimit;
-        }
-
-        return (int) UserPlan::query()
-            ->where('status', 1)
-            ->max('free_posts');
     }
 
     public function userList(Request $request)
