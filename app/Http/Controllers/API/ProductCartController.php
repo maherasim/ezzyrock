@@ -74,7 +74,7 @@ class ProductCartController extends Controller
             return response()->json(['status' => false, 'message' => __('messages.cart_unavailable')], 422);
         }
 
-        $allowedPaymentMethods = $this->getAllowedPaymentMethods();
+        $allowedPaymentMethods = $this->getAllowedPaymentMethodsForRequest();
         $indianStates = config('indian_states', []);
         $validated = $request->validate([
             'payment_method' => 'required|string|in:' . implode(',', $allowedPaymentMethods),
@@ -115,7 +115,7 @@ class ProductCartController extends Controller
                 return response()->json(['status' => false, 'message' => $prepared['message']], 422);
             }
 
-            $paymentMethod = (string) $validated['payment_method'];
+            $paymentMethod = $this->normalizePaymentMethod((string) $validated['payment_method']);
             $order = $this->createProductOrder(
                 (int) $user->id,
                 $paymentMethod,
@@ -226,7 +226,7 @@ class ProductCartController extends Controller
                         'razorpay_order_id' => (string) $razorOrder['id'],
                         'amount' => (int) round((float) $prepared['grand_total'] * 100),
                         'currency' => $this->getCurrencyCode(),
-                        'verify_endpoint' => url('/api/product-razorpay-verify'),
+                        'verify_endpoint' => url('/api/cart-razorpay-verify'),
                     ],
                     'cart_count' => 0,
                 ]);
@@ -785,6 +785,22 @@ class ProductCartController extends Controller
         return array_values(array_unique(array_merge(['wallet'], $gatewayTypes)));
     }
 
+    private function getAllowedPaymentMethodsForRequest(): array
+    {
+        $methods = $this->getAllowedPaymentMethods();
+
+        if (in_array('razorPay', $methods, true)) {
+            $methods[] = 'razorpay';
+        }
+
+        return array_values(array_unique($methods));
+    }
+
+    private function normalizePaymentMethod(string $paymentMethod): string
+    {
+        return $paymentMethod === 'razorpay' ? 'razorPay' : $paymentMethod;
+    }
+
     private function getGatewayConfig(PaymentGateway $gateway, ?int $isTest = null): array
     {
         $useTest = $isTest ?? (int) $gateway->is_test;
@@ -810,10 +826,11 @@ class ProductCartController extends Controller
             ->get();
 
         foreach ($gateways as $gateway) {
+            $type = (string) $gateway->type;
             $methods[] = [
-                'type' => (string) $gateway->type,
-                'title' => (string) ($gateway->title ?: ucfirst((string) $gateway->type)),
-                'is_online' => !in_array($gateway->type, ['cash'], true),
+                'type' => $type === 'razorPay' ? 'razorpay' : $type,
+                'title' => (string) ($gateway->title ?: ucfirst($type)),
+                'is_online' => !in_array($type, ['cash'], true),
                 'is_test' => (int) $gateway->is_test,
             ];
         }
