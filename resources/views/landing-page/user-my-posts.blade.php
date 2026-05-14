@@ -8,6 +8,43 @@
             <a href="{{ route('user.my-posts.create') }}" class="btn btn-primary btn-sm">{{ __('messages.add_classified_post') }}</a>
         </div>
 
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="border rounded-3 p-3 bg-white h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <h6 class="mb-1">Free Posts</h6>
+                            <p class="text-muted small mb-0">Normal posts only. Resets every month.</p>
+                        </div>
+                        <span class="badge bg-primary">{{ $freePostQuota['remaining'] ?? 0 }} left</span>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        Used {{ $freePostQuota['used_this_month'] ?? 0 }} of {{ $freePostQuota['monthly_limit'] ?? 0 }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="border rounded-3 p-3 bg-white h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <h6 class="mb-1">Featured Posts</h6>
+                            <p class="text-muted small mb-0">Requires an active featured plan.</p>
+                        </div>
+                        <span class="badge bg-warning text-dark">
+                            {{ !empty($featuredPostQuota['is_unlimited']) ? 'Unlimited' : (($featuredPostQuota['remaining'] ?? 0) . ' left') }}
+                        </span>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        @if(!empty($featuredPostQuota['has_active_subscription']))
+                            Used {{ $featuredPostQuota['used'] ?? 0 }} of {{ $featuredPostQuota['total_limit'] ?? 'Unlimited' }}
+                        @else
+                            No active featured plan
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+
         @if (session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif

@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Post;
 use App\Models\ServiceZone;
 use App\Models\SubCategory;
+use App\Services\FeaturedPostQuotaService;
 use App\Traits\ZoneTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -23,13 +24,16 @@ class UserClassifiedPostController extends Controller
     public function index()
     {
         $this->ensureCustomer();
+        $quotaService = app(FeaturedPostQuotaService::class);
+        $freePostQuota = $quotaService->getFreePostQuota(auth()->id());
+        $featuredPostQuota = $quotaService->getFeaturedQuota(auth()->id());
         $posts = Post::query()
             ->where('provider_id', auth()->id())
             ->where('service_type', 'classified')
             ->orderByDesc('created_at')
             ->paginate(12);
 
-        return view('landing-page.user-my-posts', compact('posts'));
+        return view('landing-page.user-my-posts', compact('posts', 'freePostQuota', 'featuredPostQuota'));
     }
 
     public function create()
@@ -76,6 +80,21 @@ class UserClassifiedPostController extends Controller
             'service_zones.*' => ['integer', Rule::exists('service_zones', 'id')->where(fn ($q) => $q->where('status', true))],
         ]);
         $isFeatured = (int) ($request->boolean('is_featured') ? 1 : 0);
+        $quotaService = app(FeaturedPostQuotaService::class);
+        $freePostQuota = $quotaService->getFreePostQuota($userId);
+        $featuredPostQuota = $quotaService->getFeaturedQuota($userId);
+
+        if (! $isFeatured && ! $freePostQuota['allow_to_create_post']) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors('Your free post limit is finished for this month. Please wait for next month or purchase a plan to create featured posts.');
+        }
+
+        if ($isFeatured && ! $featuredPostQuota['allow_to_create_featured']) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors('Please purchase a plan to create featured posts.');
+        }
 
         $data = [
             'name' => $validated['name'],
@@ -159,6 +178,16 @@ class UserClassifiedPostController extends Controller
             'service_zones.*' => ['integer', Rule::exists('service_zones', 'id')->where(fn ($q) => $q->where('status', true))],
         ]);
         $isFeatured = (int) ($request->boolean('is_featured') ? 1 : 0);
+        $quotaService = app(FeaturedPostQuotaService::class);
+        $freePostQuota = $quotaService->getFreePostQuota($userId, $post->id);
+        $featuredPostQuota = $quotaService->getFeaturedQuota($userId, $post->id);
+        $needsFeaturedSlot = $isFeatured && (int) $post->is_featured !== 1;
+
+        if ($needsFeaturedSlot && ! $featuredPostQuota['allow_to_create_featured']) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors('Please purchase a plan to create featured posts.');
+        }
 
         $post->update([
             'name' => $validated['name'],
@@ -226,6 +255,7 @@ class UserClassifiedPostController extends Controller
             ->get(['id', 'name']);
         $existingZoneIds = $post->exists ? $post->zones()->pluck('service_zones.id')->all() : [];
         $selectedZoneIds = old('service_zones', $existingZoneIds ?: $this->defaultZoneIdsFromUserLocation());
+        $quotaService = app(FeaturedPostQuotaService::class);
 
         return [
             'post' => $post,
@@ -234,6 +264,8 @@ class UserClassifiedPostController extends Controller
             'subcategoriesByCategory' => $subcategoriesByCategory,
             'zones' => $zones,
             'selectedZoneIds' => array_map('intval', (array) $selectedZoneIds),
+            'freePostQuota' => $quotaService->getFreePostQuota(auth()->id(), $post->exists ? $post->id : null),
+            'featuredPostQuota' => $quotaService->getFeaturedQuota(auth()->id(), $post->exists ? $post->id : null),
         ];
     }
 
