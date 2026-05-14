@@ -176,7 +176,7 @@ class SubscriptionController extends Controller
     {
         $request->validate([
             'plan_id' => 'required|integer|exists:user_plan,id',
-            'payment_method' => 'required|in:stripe,razorPay,phonepe,paypal,paystack,flutterwave',
+            'payment_method' => 'required|in:stripe,razorPay,razorpay,phonepe,paypal,paystack,flutterwave',
         ]);
 
         $module = 'classified'; // User subscriptions use classified module
@@ -185,7 +185,7 @@ class SubscriptionController extends Controller
             ->with('planlimit')
             ->findOrFail((int) $request->plan_id);
 
-        $paymentType = (string) $request->payment_method;
+        $paymentType = $this->normalizePaymentMethod((string) $request->payment_method);
         $userId = auth()->id();
         $startAt = now()->format('Y-m-d H:i:s');
         $activeCurrent = user_subscriptions_valid_query($userId, $module)->latest('id')->first();
@@ -243,14 +243,26 @@ class SubscriptionController extends Controller
                 'amount' => (int) round(((float) $subscription->amount) * 100),
                 'currency' => 'INR',
             ]);
-            $payment->other_transaction_detail = json_encode(['razorpay_order_id' => (string) $rzOrder['id']]);
+            $payment->other_transaction_detail = json_encode([
+                'razorpay_order_id' => (string) $rzOrder['id'],
+                'razorpay_is_test' => (int) ($razorpay->is_test ?? 1),
+                'razorpay_key' => (string) $cfg['razor_key'],
+            ]);
             $payment->save();
 
             return comman_custom_response([
                 'status' => true,
-                'checkout_url' => route('user.subscription.razorpay.checkout', $subscription->id),
-                'payment_type' => $paymentType,
-                'subscription' => new ProviderSubscribeResource($subscription),
+                'subscription' => [
+                    'id' => $subscription->id,
+                ],
+                'payment_action' => [
+                    'type' => 'razorpay',
+                    'razorpay_key' => (string) $cfg['razor_key'],
+                    'razorpay_order_id' => (string) $rzOrder['id'],
+                    'amount' => (int) round(((float) $subscription->amount) * 100),
+                    'currency' => 'INR',
+                    'verify_endpoint' => url('/api/user-subscription-razorpay-verify'),
+                ],
             ]);
         }
 
@@ -336,6 +348,58 @@ class SubscriptionController extends Controller
             'payment_type' => $paymentType,
             'session_id' => $checkoutSession->id,
             'subscription' => new ProviderSubscribeResource($subscription),
+        ]);
+    }
+
+    public function verifyUserSubscriptionRazorpay(Request $request)
+    {
+        $validated = $request->validate([
+            'subscription_id' => 'required|integer',
+            'order_id' => 'nullable|integer',
+            'razorpay_payment_id' => 'required|string',
+            'razorpay_order_id' => 'required|string',
+            'razorpay_signature' => 'required|string',
+        ]);
+
+        $subscription = UserSubscription::query()
+            ->where('user_id', auth()->id())
+            ->find($validated['subscription_id']);
+
+        if (! $subscription) {
+            return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
+        }
+
+        $payment = SubscriptionTransaction::query()->find($subscription->payment_id);
+        if (! $payment) {
+            return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
+        }
+
+        $meta = json_decode((string) ($payment->other_transaction_detail ?? '{}'), true);
+        if (($meta['razorpay_order_id'] ?? '') !== (string) $validated['razorpay_order_id']) {
+            return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
+        }
+
+        $gateway = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
+        $cfg = $this->getGatewayConfig($gateway, $meta['razorpay_is_test'] ?? null);
+        $razorSecret = $cfg['razor_secret'] ?? null;
+        if (empty($razorSecret)) {
+            return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
+        }
+
+        $signatureData = $validated['razorpay_order_id'] . '|' . $validated['razorpay_payment_id'];
+        $expectedSignature = hash_hmac('sha256', $signatureData, (string) $razorSecret);
+        if (! hash_equals($expectedSignature, (string) $validated['razorpay_signature'])) {
+            return response()->json(['status' => false, 'message' => __('messages.payment_message', ['status' => __('messages.failed')])], 422);
+        }
+
+        $this->markUserSubscriptionPaid($subscription, $payment, 'razorPay', (string) $validated['razorpay_payment_id']);
+
+        return response()->json([
+            'status' => true,
+            'message' => __('messages.subscription_added'),
+            'subscription' => [
+                'id' => $subscription->id,
+            ],
         ]);
     }
 
@@ -471,13 +535,19 @@ class SubscriptionController extends Controller
         });
     }
 
-    private function getGatewayConfig(?PaymentGateway $gateway): array
+    private function getGatewayConfig(?PaymentGateway $gateway, ?int $isTest = null): array
     {
         if (! $gateway) {
             return [];
         }
-        $payload = $gateway->is_test == 1 ? $gateway->value : $gateway->live_value;
+        $useTest = $isTest ?? (int) $gateway->is_test;
+        $payload = $useTest === 1 ? $gateway->value : $gateway->live_value;
         return json_decode((string) $payload, true) ?? [];
+    }
+
+    private function normalizePaymentMethod(string $paymentMethod): string
+    {
+        return $paymentMethod === 'razorpay' ? 'razorPay' : $paymentMethod;
     }
 
     private function generatePhonePeChecksum(string $payload, string $apiPath, string $saltKey, string $saltIndex = '1'): string
