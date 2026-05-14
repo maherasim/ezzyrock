@@ -339,6 +339,92 @@ class SubscriptionController extends Controller
         ]);
     }
 
+    public function userSubscriptionHistory(Request $request)
+    {
+        $userId = auth()->id();
+        $query = UserSubscription::query()
+            ->where('user_id', $userId)
+            ->with('payment');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('module')) {
+            $query->where('module', $request->module);
+        }
+
+        $perPage = config('constant.PER_PAGE_LIMIT', 15);
+        if ($request->filled('per_page')) {
+            $perPage = $request->per_page === 'all'
+                ? max(1, (clone $query)->count())
+                : (int) $request->per_page;
+        }
+
+        $orderBy = strtolower((string) $request->get('orderby', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $subscriptions = $query->orderBy('id', $orderBy)->paginate($perPage);
+
+        return comman_custom_response([
+            'pagination' => [
+                'total_items' => $subscriptions->total(),
+                'per_page' => $subscriptions->perPage(),
+                'currentPage' => $subscriptions->currentPage(),
+                'totalPages' => $subscriptions->lastPage(),
+                'from' => $subscriptions->firstItem(),
+                'to' => $subscriptions->lastItem(),
+                'next_page' => $subscriptions->nextPageUrl(),
+                'previous_page' => $subscriptions->previousPageUrl(),
+            ],
+            'data' => $subscriptions->getCollection()
+                ->map(function (UserSubscription $subscription) {
+                    return $this->formatUserSubscriptionHistoryItem($subscription);
+                })
+                ->values(),
+        ]);
+    }
+
+    private function formatUserSubscriptionHistoryItem(UserSubscription $subscription): array
+    {
+        $payment = $subscription->payment;
+        $status = (string) $subscription->status;
+        $isActive = $status === config('constant.SUBSCRIPTION_STATUS.ACTIVE')
+            && (! $subscription->end_at || now()->lessThanOrEqualTo($subscription->end_at));
+        $isExpired = ! empty($subscription->end_at) && now()->greaterThan($subscription->end_at);
+        $planLimitation = json_decode((string) $subscription->plan_limitation, true);
+        $featuredLimit = $planLimitation['featured_classified']['limit'] ?? null;
+
+        return [
+            'id' => $subscription->id,
+            'plan_id' => $subscription->plan_id,
+            'title' => $subscription->title,
+            'identifier' => $subscription->identifier,
+            'type' => $subscription->type,
+            'amount' => (float) $subscription->amount,
+            'status' => $status,
+            'computed_status' => $isExpired && $status === config('constant.SUBSCRIPTION_STATUS.ACTIVE') ? 'expired' : $status,
+            'is_active' => $isActive,
+            'is_expired' => $isExpired,
+            'start_at' => $subscription->start_at,
+            'end_at' => $subscription->end_at,
+            'days_left' => $isActive && $subscription->end_at ? now()->diffInDays($subscription->end_at, false) : 0,
+            'duration' => $subscription->duration,
+            'plan_type' => $subscription->plan_type,
+            'module' => $subscription->module,
+            'featured_posts_limit' => $featuredLimit === null || $featuredLimit === '' ? null : (int) $featuredLimit,
+            'plan_limitation' => $planLimitation ?: null,
+            'payment' => $payment ? [
+                'id' => $payment->id,
+                'amount' => (float) $payment->amount,
+                'payment_type' => $payment->payment_type,
+                'payment_status' => $payment->payment_status,
+                'txn_id' => $payment->txn_id,
+                'created_at' => $payment->created_at,
+            ] : null,
+            'created_at' => $subscription->created_at,
+            'updated_at' => $subscription->updated_at,
+        ];
+    }
+
     private function markSubscriptionPaid(ProviderSubscription $subscription, SubscriptionTransaction $payment, string $paymentType, string $txnId): void
     {
         DB::transaction(function () use ($subscription, $payment, $paymentType, $txnId) {

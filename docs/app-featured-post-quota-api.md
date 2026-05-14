@@ -217,6 +217,93 @@ Success response:
 }
 ```
 
+### 4. User Subscription History
+
+Endpoint:
+
+```http
+GET /api/user-subscription-history
+Authorization: Bearer {token}
+```
+
+Purpose:
+
+- Shows logged-in user's purchased plan history from `user_subscriptions`.
+- App can use this for "My Plans", "Subscription History", or plan status screen.
+
+Optional query params:
+
+```http
+GET /api/user-subscription-history?per_page=10&orderby=desc
+GET /api/user-subscription-history?status=active
+GET /api/user-subscription-history?module=classified
+GET /api/user-subscription-history?per_page=all
+```
+
+Success response:
+
+```json
+{
+  "status": true,
+  "pagination": {
+    "total_items": 1,
+    "per_page": 10,
+    "currentPage": 1,
+    "totalPages": 1,
+    "from": 1,
+    "to": 1,
+    "next_page": null,
+    "previous_page": null
+  },
+  "data": [
+    {
+      "id": 1,
+      "plan_id": 1,
+      "title": "BASIC classified",
+      "identifier": "ncie",
+      "type": "limited",
+      "amount": 90,
+      "status": "active",
+      "computed_status": "active",
+      "is_active": true,
+      "is_expired": false,
+      "start_at": "2026-05-14 10:28:27",
+      "end_at": "2026-05-21 10:28:27",
+      "days_left": 7,
+      "duration": null,
+      "plan_type": null,
+      "module": "classified",
+      "featured_posts_limit": 5,
+      "plan_limitation": {
+        "featured_classified": {
+          "is_checked": "on",
+          "limit": "5"
+        }
+      },
+      "payment": {
+        "id": 1,
+        "amount": 90,
+        "payment_type": "razorPay",
+        "payment_status": "paid",
+        "txn_id": "pay_xxxxx",
+        "created_at": "2026-05-14T10:28:27.000000Z"
+      },
+      "created_at": "2026-05-14T10:28:27.000000Z",
+      "updated_at": "2026-05-14T10:28:27.000000Z"
+    }
+  ]
+}
+```
+
+App handling:
+
+- Show plan title from `title`.
+- Show payment amount from `amount`.
+- Use `computed_status` for display. It can show `expired` when DB status is still `active` but `end_at` has passed.
+- Use `is_active` to decide whether this plan is currently usable.
+- Show featured limit from `featured_posts_limit`.
+- Show payment state from `payment.payment_status`.
+
 ## Error Responses
 
 ### Free Normal Post Limit Finished

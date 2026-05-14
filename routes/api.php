@@ -193,6 +193,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
 
     Route::get('user-subscription-config', [API\SubscriptionController::class, 'subscriptionConfig']);
     Route::post('user-subscription-checkout', [API\SubscriptionController::class, 'subscriptionCheckout']);
+    Route::get('user-subscription-history', [API\SubscriptionController::class, 'userSubscriptionHistory']);
 
     Route::post('save-post-job', [App\Http\Controllers\PostJobRequestController::class, 'store']);
     Route::post('post-job-delete/{id}', [App\Http\Controllers\PostJobRequestController::class, 'destroy']);
