@@ -191,7 +191,10 @@ class ProductCartController extends Controller
 
             if ($paymentMethod === 'razorPay') {
                 $gateway = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
-                $gatewayData = json_decode((string) ($gateway->value ?? '{}'), true);
+                if (!$gateway) {
+                    throw new \RuntimeException(__('messages.something_wrong'));
+                }
+                $gatewayData = $this->getGatewayConfig($gateway);
                 $razorKey = $gatewayData['razor_key'] ?? null;
                 $razorSecret = $gatewayData['razor_secret'] ?? null;
                 if (empty($razorKey) || empty($razorSecret)) {
@@ -269,7 +272,10 @@ class ProductCartController extends Controller
         }
 
         $gateway = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
-        $gatewayData = json_decode((string) ($gateway->value ?? '{}'), true);
+        if (!$gateway) {
+            return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
+        }
+        $gatewayData = $this->getGatewayConfig($gateway);
         $razorSecret = $gatewayData['razor_secret'] ?? null;
         if (empty($razorSecret)) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
@@ -776,6 +782,13 @@ class ProductCartController extends Controller
             ->all();
 
         return array_values(array_unique(array_merge(['wallet'], $gatewayTypes)));
+    }
+
+    private function getGatewayConfig(PaymentGateway $gateway): array
+    {
+        $payload = (int) $gateway->is_test === 1 ? $gateway->value : $gateway->live_value;
+
+        return json_decode((string) $payload, true) ?? [];
     }
 
     private function paymentMethodsForApi(int $userId): array

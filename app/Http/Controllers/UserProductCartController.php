@@ -388,7 +388,10 @@ class UserProductCartController extends Controller
 
             if ($paymentMethod === 'razorPay') {
                 $razorpay = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
-                $gatewayData = json_decode((string) ($razorpay->value ?? '{}'), true);
+                if (! $razorpay) {
+                    return redirect()->route('user.cart')->withErrors(__('messages.something_wrong'));
+                }
+                $gatewayData = $this->getGatewayConfig($razorpay);
                 $razorKey = $gatewayData['razor_key'] ?? null;
                 $razorSecret = $gatewayData['razor_secret'] ?? null;
                 if (empty($razorKey) || empty($razorSecret)) {
@@ -561,7 +564,10 @@ class UserProductCartController extends Controller
     {
         $order = \App\Models\ProductOrder::query()->where('user_id', auth()->id())->findOrFail($id);
         $gateway = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
-        $gatewayData = json_decode((string) ($gateway->value ?? '{}'), true);
+        if (! $gateway) {
+            return redirect()->route('user.product-order.show', $order)->withErrors(__('messages.something_wrong'));
+        }
+        $gatewayData = $this->getGatewayConfig($gateway);
         $razorKey = $gatewayData['razor_key'] ?? null;
         if (empty($razorKey)) {
             return redirect()->route('user.product-order.show', $order)->withErrors(__('messages.something_wrong'));
@@ -585,7 +591,10 @@ class UserProductCartController extends Controller
         ]);
 
         $gateway = PaymentGateway::query()->where('type', 'razorPay')->where('status', 1)->first();
-        $gatewayData = json_decode((string) ($gateway->value ?? '{}'), true);
+        if (! $gateway) {
+            return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
+        }
+        $gatewayData = $this->getGatewayConfig($gateway);
         $razorSecret = $gatewayData['razor_secret'] ?? null;
         if (empty($razorSecret)) {
             return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 422);
