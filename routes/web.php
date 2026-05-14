@@ -7,6 +7,7 @@ use App\Http\Controllers\BlogController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\UserPlanController;
+use App\Http\Controllers\FreePostSettingController;
 use App\Http\Controllers\AdminSubscriptionController;
 use App\Http\Controllers\ShopController;
 use App\Http\Controllers\CouponController;
@@ -559,6 +560,13 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::get('user_plans-index-data', [UserPlanController::class, 'index_data'])->name('user_plans.index_data');
     Route::post('user_plans-bulk-action', [UserPlanController::class, 'bulk_action'])->name('user_plans.bulk-action');
     Route::post('user_plans/{id}', [UserPlanController::class, 'destroy'])->name('user_plans.destroy');
+
+    Route::group(['middleware' => ['role:admin|demo_admin|demo_Admin']], function () {
+        Route::resource('free-post-settings', FreePostSettingController::class)->only(['index', 'store', 'destroy']);
+        Route::get('free-post-settings-index-data', [FreePostSettingController::class, 'index_data'])->name('free-post-settings.index_data');
+        Route::post('free-post-settings-bulk-action', [FreePostSettingController::class, 'bulk_action'])->name('free-post-settings.bulk-action');
+        Route::post('free-post-settings/{id}', [FreePostSettingController::class, 'destroy'])->name('free-post-settings.destroy');
+    });
 
     Route::group(['middleware' => ['permission:bank list']], function () {
         Route::resource('bank', BankController::class);

@@ -1283,6 +1283,21 @@
 </svg>')
 ->nickname('user_plan');
 
+        $menu
+            ->add(
+                '<span>Free Posts</span><span class="custom-tooltip"><span class="tooltip-text">Free Posts</span></span>',
+                ['route' => 'free-post-settings.index'],
+            )
+            ->prepend(
+                '<svg width="15" height="15" class="sidebar-menu-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M4 6.5C4 5.11929 5.11929 4 6.5 4H17.5C18.8807 4 20 5.11929 20 6.5V17.5C20 18.8807 18.8807 20 17.5 20H6.5C5.11929 20 4 18.8807 4 17.5V6.5Z" stroke="currentColor" stroke-width="1.5"/>
+<path d="M8 9H16M8 13H13M8 17H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M15 15L16.5 16.5L20 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>',
+            )
+            ->nickname('free_post_settings')
+            ->data('role', ['admin', 'demo_admin']);
+
             $menu
                 ->add(
                     '<span>' .

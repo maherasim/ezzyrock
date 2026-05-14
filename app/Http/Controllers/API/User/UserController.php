@@ -16,6 +16,7 @@ use App\Http\Resources\API\ShopResource;
 use Illuminate\Support\Facades\Password;
 use App\Models\Booking;
 use App\Models\Wallet;
+use App\Models\FreePostSetting;
 use App\Models\UserPlan;
 use App\Models\UserSubscription;
 use App\Models\HandymanRating;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Artisan;
 use App\Models\Documents;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Models\ProviderZoneMapping;
 use App\Traits\ZoneTrait;
 use App\Models\ServiceZoneMapping;
@@ -513,6 +515,16 @@ class UserController extends Controller
 
     private function getFreePostsLimitForLogin(): int
     {
+        $freePostSettingLimit = Schema::hasTable('free_post_settings')
+            ? FreePostSetting::query()
+                ->where('status', 1)
+                ->max('free_posts')
+            : null;
+
+        if ($freePostSettingLimit !== null) {
+            return (int) $freePostSettingLimit;
+        }
+
         return (int) UserPlan::query()
             ->where('status', 1)
             ->max('free_posts');

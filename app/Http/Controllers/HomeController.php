@@ -412,6 +412,13 @@ class HomeController extends Controller
                 $partial->status = $request->status;
                 $partial->save();
                 break;
+            case 'free_post_setting_status':
+                $freePostSetting = \App\Models\FreePostSetting::find($request->id);
+                if ($freePostSetting) {
+                    $freePostSetting->status = $request->status;
+                    $freePostSetting->save();
+                }
+                break;
 
             default:
                 $message = 'error';
