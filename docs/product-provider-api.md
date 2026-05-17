@@ -117,7 +117,7 @@ Payload fields:
 | --- | --- | --- | --- |
 | `name` | string | yes | Unique per provider. |
 | `provider_id` | integer | admin only | Optional. Admin/demo admin can create for another provider; normal providers always use their own account. |
-| `category_id` | integer | yes | Must be an active ecommerce category. |
+| `category_id` | integer | yes | Must be an active category. Product is still saved as ecommerce. |
 | `subcategory_id` | integer/null | no | Must belong to `category_id` when supplied. |
 | `type` | string | no | Defaults to `fixed`. Web form uses hidden ecommerce product type. |
 | `price` | decimal | yes | Minimum `0`. If variants are sent, product price becomes the minimum variant price. |

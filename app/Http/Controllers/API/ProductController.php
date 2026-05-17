@@ -241,7 +241,7 @@ class ProductController extends Controller
             ],
             'category_id' => [
                 'required',
-                Rule::exists('categories', 'id')->where(fn ($q) => $q->where('module_type', Category::MODULE_ECOMMERCE)->where('status', 1)),
+                Rule::exists('categories', 'id')->where(fn ($q) => $q->where('status', 1)),
             ],
             'subcategory_id' => [
                 'nullable',
