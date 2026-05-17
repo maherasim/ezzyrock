@@ -9,7 +9,9 @@ use App\Models\ProductOrder;
 use App\Models\ProductOrderLiveLocation;
 use App\Models\ProductOrderProof;
 use App\Models\User;
+use App\Notifications\CommonNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -250,6 +252,7 @@ class ProductOrderController extends Controller
         $this->mergeOrderNote($order, ['last_reason' => $request->reason]);
         $order->save();
         $this->recordActivity($order, $request->status, $this->statusLabel($request->status), ['reason' => $request->reason]);
+        $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'update_booking_status', 'Product order status has been updated successfully');
 
         return response()->json([
             'status' => true,
@@ -300,6 +303,7 @@ class ProductOrderController extends Controller
         $order->status = 'assigned';
         $order->save();
         $this->recordActivity($order, 'assigned', 'Delivery boy has been assigned successfully', ['handyman_id' => $ids]);
+        $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'assigned_booking', 'Delivery boy has been assigned successfully');
 
         return response()->json([
             'status' => true,
@@ -403,6 +407,7 @@ class ProductOrderController extends Controller
             storeMediaFile($proof, $files, 'proof_attachment');
         }
         $this->recordActivity($order, 'proof_uploaded', 'Delivery proof has been saved successfully');
+        $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'update_booking_status', 'Delivery proof has been saved successfully');
 
         return response()->json([
             'status' => true,
@@ -433,6 +438,9 @@ class ProductOrderController extends Controller
         $this->mergeOrderNote($order, ['payment_remarks' => $request->remarks]);
         $order->save();
         $this->recordActivity($order, 'payment_confirmed', 'Payment has been confirmed successfully', ['payment_status' => $request->payment_status, 'remarks' => $request->remarks]);
+        $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'payment_message_status', 'Payment has been confirmed successfully', [
+            'payment_status' => $request->payment_status,
+        ]);
 
         return response()->json([
             'status' => true,
@@ -534,6 +542,8 @@ class ProductOrderController extends Controller
             'order_number' => $order->order_number,
             'status' => $order->status,
             'status_label' => $this->statusLabel((string) $order->status),
+            'delivery_status' => $this->orderColumnValue($order, 'delivery_status'),
+            'delivery_status_label' => $this->statusLabel((string) ($this->orderColumnValue($order, 'delivery_status') ?? '')),
             'payment_status' => $order->payment_status,
             'payment_method' => $order->payment_type,
             'payment_type' => $order->payment_type,
@@ -573,6 +583,8 @@ class ProductOrderController extends Controller
             'order_number' => $order->order_number,
             'status' => $order->status,
             'status_label' => $this->statusLabel((string) $order->status),
+            'delivery_status' => $this->orderColumnValue($order, 'delivery_status'),
+            'delivery_status_label' => $this->statusLabel((string) ($this->orderColumnValue($order, 'delivery_status') ?? '')),
             'date' => optional($order->created_at)->format('Y-m-d H:i:s'),
             'description' => $shipping['notes'] ?? null,
             'payment_id' => null,
@@ -758,6 +770,76 @@ class ProductOrderController extends Controller
         ]);
     }
 
+    private function sendProductOrderNotification(ProductOrder $order, string $templateType, string $message, array $extra = []): void
+    {
+        $order->loadMissing(['items.product.providers', 'assignments.handyman', 'user']);
+        $providers = $order->items
+            ->map(fn ($item) => $item->product?->providers)
+            ->filter()
+            ->unique('id')
+            ->values();
+        $handymen = $order->assignments
+            ->map(fn ($assignment) => $assignment->handyman)
+            ->filter()
+            ->unique('id')
+            ->values();
+        $customer = $order->user;
+        $actor = auth()->user();
+        $providerName = optional($providers->first())->display_name;
+        $handymanName = $handymen->pluck('display_name')->filter()->join(', ');
+
+        $recipients = collect();
+        if ($customer) {
+            $recipients->push($customer);
+        }
+        $providers->each(fn ($provider) => $recipients->push($provider));
+        $handymen->each(fn ($handyman) => $recipients->push($handyman));
+
+        $recipients
+            ->filter()
+            ->unique('id')
+            ->each(function (User $recipient) use ($order, $templateType, $message, $extra, $customer, $providerName, $handymanName, $actor) {
+                try {
+                    $recipient->notify(new CommonNotification($templateType, array_merge([
+                        'person_id' => $recipient->id,
+                        'user_type' => $recipient->user_type,
+                        'type' => 'product_order',
+                        'message' => $message,
+                        'booking_id' => $order->id,
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'product_order_id' => $order->id,
+                        'booking_status' => $this->statusLabel((string) $order->status),
+                        'old_status' => '',
+                        'payment_status' => $order->payment_status ?? ($extra['payment_status'] ?? ''),
+                        'payment_type' => $order->payment_type ?? '',
+                        'pay_amount' => getPriceFormat($order->total ?? 0),
+                        'customer_name' => $customer?->display_name ?? '',
+                        'user_name' => $customer?->display_name ?? '',
+                        'user_email' => $customer?->email ?? '',
+                        'user_contact' => $customer?->contact_number ?? '',
+                        'provider_name' => $providerName ?? '',
+                        'handyman_name' => $handymanName,
+                        'assignee_name' => $handymanName,
+                        'booking_services_name' => 'Product Order',
+                        'service_name' => 'Product Order',
+                        'booking_date' => optional($order->created_at)->format('Y-m-d') ?? '',
+                        'booking_time' => optional($order->created_at)->format('H:i:s') ?? '',
+                        'venue_address' => $this->shippingData($order)['address'] ?? '',
+                        'check_booking_type' => 'product_order',
+                        'logged_in_user_role' => $actor?->user_type ? ucfirst($actor->user_type) : '',
+                    ], $extra)));
+                } catch (\Throwable $e) {
+                    Log::error('Product order notification failed', [
+                        'order_id' => $order->id,
+                        'template_type' => $templateType,
+                        'recipient_id' => $recipient->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            });
+    }
+
     private function mergeOrderNote(ProductOrder $order, array $payload): void
     {
         $notes = $this->decodeJson($order->notes);
@@ -819,7 +901,16 @@ class ProductOrderController extends Controller
 
     private function statusLabel(string $status): string
     {
+        if ($status === '') {
+            return '';
+        }
+
         return ucwords(str_replace('_', ' ', $status));
+    }
+
+    private function orderColumnValue(ProductOrder $order, string $column)
+    {
+        return Schema::hasColumn('product_orders', $column) ? $order->{$column} : null;
     }
 
     private function csv($value): array

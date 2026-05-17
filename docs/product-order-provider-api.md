@@ -189,3 +189,4 @@ Updates `product_orders.payment_status` and records activity.
 - Current checkout can still create one order containing products from multiple providers.
 - Provider list/detail returns only the logged-in provider's items when the actor is a provider.
 - Order-level payment status remains shared across the whole product order.
+- Status updates, assignment, proof upload, and payment confirmation send notifications using the existing booking notification template types so the app receives them through the same channels as service bookings.
