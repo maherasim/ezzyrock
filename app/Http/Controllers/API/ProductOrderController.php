@@ -231,8 +231,9 @@ class ProductOrderController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'id' => 'required|integer|exists:product_orders,id',
-            'status' => ['required', 'string', Rule::in($this->providerStatuses)],
+           
             'reason' => 'nullable|string|max:1000',
+            'delivery_status' => 'nullable|string|max:1000',
             'payment_status' => 'nullable|string|max:64',
         ]);
 
@@ -245,16 +246,16 @@ class ProductOrderController extends Controller
             return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
         }
 
-        $order->status = $request->status;
+        $order->status = $request->delivery_status;
         if (Schema::hasColumn('product_orders', 'delivery_status')) {
-            $order->delivery_status = $request->status;
+            $order->delivery_status = $request->delivery_status;
         }
         if ($request->filled('payment_status') && Schema::hasColumn('product_orders', 'payment_status')) {
             $order->payment_status = $request->payment_status;
         }
         $this->mergeOrderNote($order, ['last_reason' => $request->reason]);
         $order->save();
-        $this->recordActivity($order, $request->status, $this->statusLabel($request->status), ['reason' => $request->reason]);
+        $this->recordActivity($order, $request->delivery_status, $this->statusLabel($request->delivery_status), ['reason' => $request->reason]);
         $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'update_booking_status', 'Product order status has been updated successfully');
 
         return response()->json([
