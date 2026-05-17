@@ -246,6 +246,9 @@ class ProductOrderController extends Controller
         }
 
         $order->status = $request->status;
+        if (Schema::hasColumn('product_orders', 'delivery_status')) {
+            $order->delivery_status = $request->status;
+        }
         if ($request->filled('payment_status') && Schema::hasColumn('product_orders', 'payment_status')) {
             $order->payment_status = $request->payment_status;
         }
@@ -301,6 +304,9 @@ class ProductOrderController extends Controller
             ]);
         }
         $order->status = 'assigned';
+        if (Schema::hasColumn('product_orders', 'delivery_status')) {
+            $order->delivery_status = 'assigned';
+        }
         $order->save();
         $this->recordActivity($order, 'assigned', 'Delivery boy has been assigned successfully', ['handyman_id' => $ids]);
         $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'assigned_booking', 'Delivery boy has been assigned successfully');

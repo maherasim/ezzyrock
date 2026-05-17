@@ -103,6 +103,8 @@ Customer users still get the old customer detail response. Provider/handyman use
 
 Creates a row in `product_order_activities`.
 
+If the `product_orders.delivery_status` column exists, this endpoint updates it to the same value as `status`. Assignment also sets `delivery_status = assigned`.
+
 ## Assign Delivery Boy
 
 `POST /api/product-order-assigned`
