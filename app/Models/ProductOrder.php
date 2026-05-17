@@ -42,4 +42,24 @@ class ProductOrder extends Model
     {
         return $this->hasMany(ProductOrderItem::class, 'product_order_id');
     }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(ProductOrderAssignment::class, 'product_order_id')->with('handyman');
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(ProductOrderActivity::class, 'product_order_id');
+    }
+
+    public function liveLocation()
+    {
+        return $this->hasOne(ProductOrderLiveLocation::class, 'product_order_id');
+    }
+
+    public function proofs(): HasMany
+    {
+        return $this->hasMany(ProductOrderProof::class, 'product_order_id');
+    }
 }

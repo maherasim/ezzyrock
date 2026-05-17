@@ -251,7 +251,15 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('product-payment-complete', [API\ProductCartController::class, 'completePayment']);
     Route::get('my-product-orders', [API\ProductOrderController::class, 'list']);
     Route::get('my-product-orders/{id}', [API\ProductOrderController::class, 'detail']);
+    Route::get('provider-product-order-list', [API\ProductOrderController::class, 'providerList']);
     Route::post('product-order-detail', [API\ProductOrderController::class, 'detail']);
+    Route::post('product-order-update', [API\ProductOrderController::class, 'updateProviderOrder']);
+    Route::post('product-order-assigned', [API\ProductOrderController::class, 'assignProviderOrder']);
+    Route::post('product-order-update-location', [API\ProductOrderController::class, 'updateProviderOrderLocation']);
+    Route::get('product-order-location', [API\ProductOrderController::class, 'providerOrderLocation']);
+    Route::post('product-order-location', [API\ProductOrderController::class, 'providerOrderLocation']);
+    Route::post('product-order-proof-save', [API\ProductOrderController::class, 'saveProviderOrderProof']);
+    Route::post('product-order-payment-confirm', [API\ProductOrderController::class, 'confirmProviderOrderPayment']);
 
     Route::post('update-location', [API\BookingController::class, 'updateLocation']);
     Route::get('get-location', [API\BookingController::class, 'getLocation']);
