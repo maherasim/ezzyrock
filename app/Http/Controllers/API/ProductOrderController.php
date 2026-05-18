@@ -92,7 +92,13 @@ class ProductOrderController extends Controller
         $orderId = $id ?: $request->get('order_id', $request->get('id'));
         $order = ProductOrder::query()
             ->where('user_id', $user->id)
-            ->with(['items.product', 'items.variant.option.attribute'])
+            ->with([
+                'items.product.providers.getServiceRating',
+                'items.product.shops',
+                'items.variant.option.attribute',
+                'assignments.handyman.handymantype',
+                'assignments.handyman.handymanRating',
+            ])
             ->find($orderId);
 
         if (!$order) {
@@ -485,6 +491,11 @@ class ProductOrderController extends Controller
     private function serializeOrderDetail(ProductOrder $order): array
     {
         $notes = $this->decodeJson($order->notes);
+        $provider = $order->items
+            ->map(fn ($item) => $item->product?->providers)
+            ->filter()
+            ->first();
+        $assignment = $order->assignments->first();
 
         return [
             'id' => $order->id,
@@ -503,10 +514,58 @@ class ProductOrderController extends Controller
             'total_format' => getPriceFormat($order->total),
             'tax_detail' => $order->tax_detail,
             'shipping' => $notes['shipping'] ?? null,
+            'provider' => $provider ? $this->serializeProductOrderProvider($provider) : null,
+            'delivery_boy' => $assignment?->handyman ? $this->serializeProductOrderDeliveryBoy($assignment->handyman) : null,
             'items_count' => $order->items->count(),
             'items' => $order->items
                 ->map(fn ($item) => $this->serializeOrderItem($item))
                 ->values(),
+        ];
+    }
+
+    private function serializeProductOrderProvider(User $user): array
+    {
+        $rating = $user->relationLoaded('getServiceRating')
+            ? $user->getServiceRating->avg('rating')
+            : $user->getServiceRating()->avg('rating');
+
+        return [
+            'id' => $user->id,
+            'display_name' => $user->display_name,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'contact_number' => $user->contact_number,
+            'profile_image' => $this->userImage($user),
+            'address' => $user->address,
+            'uid' => $user->uid,
+            'providers_service_rating' => (float) number_format(max((float) ($rating ?? 0), 0), 2),
+            'is_verify_provider' => (int) verify_provider_document($user->id),
+        ];
+    }
+
+    private function serializeProductOrderDeliveryBoy(User $user): array
+    {
+        $rating = $user->relationLoaded('handymanRating')
+            ? $user->handymanRating->avg('rating')
+            : $user->handymanRating()->avg('rating');
+
+        return [
+            'id' => $user->id,
+            'display_name' => $user->display_name,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'contact_number' => $user->contact_number,
+            'profile_image' => $this->userImage($user),
+            'address' => $user->address,
+            'uid' => $user->uid,
+            'handyman_rating' => (float) number_format(max((float) ($rating ?? 0), 0), 2),
+            'is_verified' => (int) ($user->is_verified ?? 0),
+            'is_available' => (bool) $user->is_available,
+            'is_handyman_available' => (bool) $user->is_available,
+            'handyman_type' => optional($user->handymantype)->name,
+            'designation' => $user->designation,
         ];
     }
 
