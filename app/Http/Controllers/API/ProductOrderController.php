@@ -99,6 +99,7 @@ class ProductOrderController extends Controller
                 'assignments.handyman.handymantype',
                 'assignments.handyman.handymanRating',
                 'activities',
+                'proofs',
             ])
             ->find($orderId);
 
@@ -431,6 +432,23 @@ class ProductOrderController extends Controller
         ]);
     }
 
+    public function productOrderProofList(Request $request)
+    {
+        $orderId = $request->get('id', $request->get('order_id'));
+        $order = ProductOrder::query()
+            ->with('proofs')
+            ->find((int) $orderId);
+
+        if (!$order) {
+            return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => $this->serializeOrderProofs($order),
+        ]);
+    }
+
     public function confirmProviderOrderPayment(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -523,6 +541,7 @@ class ProductOrderController extends Controller
                 ->map(fn ($item) => $this->serializeOrderItem($item))
                 ->values(),
             'activity' => $this->serializeOrderActivities($order),
+            'proof' => $this->serializeOrderProofs($order),
         ];
     }
 
@@ -690,23 +709,7 @@ class ProductOrderController extends Controller
             'delivery_boy' => $assignment?->handyman ? $this->serializeDeliveryBoy($assignment->handyman) : null,
             'items' => $items->map(fn ($item) => $this->serializeProviderDetailItem($item))->values(),
             'activity' => $this->serializeOrderActivities($order),
-            'proof' => $order->proofs->flatMap(function ($proof) {
-                $media = $proof->getMedia('proof_attachment');
-                if ($media->isEmpty()) {
-                    return [[
-                        'id' => $proof->id,
-                        'url' => null,
-                        'description' => $proof->description,
-                        'created_at' => optional($proof->created_at)->format('Y-m-d H:i:s'),
-                    ]];
-                }
-                return $media->map(fn ($file) => [
-                    'id' => $proof->id,
-                    'url' => $file->getUrl(),
-                    'description' => $proof->description,
-                    'created_at' => optional($proof->created_at)->format('Y-m-d H:i:s'),
-                ]);
-            })->values(),
+            'proof' => $this->serializeOrderProofs($order),
             'latest_location' => $location ? [
                 'latitude' => (string) $location->latitude,
                 'longitude' => (string) $location->longitude,
@@ -764,6 +767,32 @@ class ProductOrderController extends Controller
                 'created_by' => $activity->created_by,
             ])
             ->values();
+    }
+
+    private function serializeOrderProofs(ProductOrder $order)
+    {
+        return $order->proofs->flatMap(function ($proof) {
+            $media = $proof->getMedia('proof_attachment');
+            if ($media->isEmpty()) {
+                return [[
+                    'id' => $proof->id,
+                    'order_id' => $proof->product_order_id,
+                    'user_id' => $proof->user_id,
+                    'url' => null,
+                    'description' => $proof->description,
+                    'created_at' => optional($proof->created_at)->format('Y-m-d H:i:s'),
+                ]];
+            }
+
+            return $media->map(fn ($file) => [
+                'id' => $proof->id,
+                'order_id' => $proof->product_order_id,
+                'user_id' => $proof->user_id,
+                'url' => $file->getUrl(),
+                'description' => $proof->description,
+                'created_at' => optional($proof->created_at)->format('Y-m-d H:i:s'),
+            ]);
+        })->values();
     }
 
     private function findAccessibleProviderOrder(int $id, bool $providerOnly = false): ?ProductOrder
