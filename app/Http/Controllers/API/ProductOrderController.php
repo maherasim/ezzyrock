@@ -365,7 +365,7 @@ class ProductOrderController extends Controller
     public function providerOrderLocation(Request $request)
     {
         $orderId = $request->get('id', $request->get('order_id'));
-        $order = $this->findAccessibleProviderOrder((int) $orderId);
+        $order = ProductOrder::query()->find((int) $orderId);
         if (!$order) {
             return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
         }
