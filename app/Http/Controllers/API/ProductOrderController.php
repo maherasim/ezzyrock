@@ -108,7 +108,7 @@ class ProductOrderController extends Controller
     public function providerList(Request $request)
     {
         $user = auth()->user();
-        if (!$user || !in_array($user->user_type, ['provider', 'handyman'], true)) {
+        if (!$user || !in_array($user->user_type, ['provider', 'handyman', 'user'], true)) {
             return response()->json(['status' => false, 'message' => __('messages.unauthorized')], 403);
         }
 
@@ -124,8 +124,10 @@ class ProductOrderController extends Controller
 
         if ($user->user_type === 'provider') {
             $orders->whereHas('items.product', fn ($q) => $q->where('provider_id', $user->id));
-        } else {
+        } elseif ($user->user_type === 'handyman') {
             $orders->whereHas('assignments', fn ($q) => $q->where('handyman_id', $user->id));
+        } else {
+            $orders->where('user_id', $user->id);
         }
 
         if ($request->filled('status')) {
