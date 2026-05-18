@@ -98,6 +98,7 @@ class ProductOrderController extends Controller
                 'items.variant.option.attribute',
                 'assignments.handyman.handymantype',
                 'assignments.handyman.handymanRating',
+                'activities',
             ])
             ->find($orderId);
 
@@ -521,6 +522,7 @@ class ProductOrderController extends Controller
             'items' => $order->items
                 ->map(fn ($item) => $this->serializeOrderItem($item))
                 ->values(),
+            'activity' => $this->serializeOrderActivities($order),
         ];
     }
 
@@ -687,14 +689,7 @@ class ProductOrderController extends Controller
             ] : null,
             'delivery_boy' => $assignment?->handyman ? $this->serializeDeliveryBoy($assignment->handyman) : null,
             'items' => $items->map(fn ($item) => $this->serializeProviderDetailItem($item))->values(),
-            'activity' => $order->activities->sortBy('id')->map(fn ($activity) => [
-                'id' => $activity->id,
-                'order_id' => $activity->product_order_id,
-                'activity_type' => $activity->activity_type,
-                'activity_message' => $activity->activity_message,
-                'datetime' => optional($activity->datetime ?? $activity->created_at)->format('Y-m-d H:i:s'),
-                'created_by' => $activity->created_by,
-            ])->values(),
+            'activity' => $this->serializeOrderActivities($order),
             'proof' => $order->proofs->flatMap(function ($proof) {
                 $media = $proof->getMedia('proof_attachment');
                 if ($media->isEmpty()) {
@@ -754,6 +749,21 @@ class ProductOrderController extends Controller
             'variant_id' => $item->product_variant_id,
             'variant_label' => $item->variant_label,
         ];
+    }
+
+    private function serializeOrderActivities(ProductOrder $order)
+    {
+        return $order->activities
+            ->sortBy('id')
+            ->map(fn ($activity) => [
+                'id' => $activity->id,
+                'order_id' => $activity->product_order_id,
+                'activity_type' => $activity->activity_type,
+                'activity_message' => $activity->activity_message,
+                'datetime' => optional($activity->datetime ?? $activity->created_at)->format('Y-m-d H:i:s'),
+                'created_by' => $activity->created_by,
+            ])
+            ->values();
     }
 
     private function findAccessibleProviderOrder(int $id, bool $providerOnly = false): ?ProductOrder
