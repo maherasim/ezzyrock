@@ -513,6 +513,7 @@ class ProductOrderController extends Controller
             'total' => (float) $order->total,
             'total_format' => getPriceFormat($order->total),
             'tax_detail' => $order->tax_detail,
+            'notes' => $notes,
             'shipping' => $notes['shipping'] ?? null,
             'provider' => $provider ? $this->serializeProductOrderProvider($provider) : null,
             'delivery_boy' => $assignment?->handyman ? $this->serializeProductOrderDeliveryBoy($assignment->handyman) : null,
@@ -642,6 +643,7 @@ class ProductOrderController extends Controller
         $firstProduct = $items->first()?->product;
         $shop = $firstProduct?->shops?->first();
         $assignment = $order->assignments->first();
+        $notes = $this->decodeJson($order->notes);
         $shipping = $this->shippingData($order);
         $location = $order->liveLocation;
 
@@ -654,6 +656,7 @@ class ProductOrderController extends Controller
             'delivery_status' => $this->orderColumnValue($order, 'delivery_status'),
             'delivery_status_label' => $this->statusLabel((string) ($this->orderColumnValue($order, 'delivery_status') ?? '')),
             'date' => optional($order->created_at)->format('Y-m-d H:i:s'),
+            'notes' => $notes,
             'description' => $shipping['notes'] ?? null,
             'payment_id' => null,
             'payment_status' => $order->payment_status,
