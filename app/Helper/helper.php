@@ -1324,6 +1324,25 @@ function get_user_active_plan($user_id, $module = null)
     return $activeplan;
 }
 
+function get_provider_active_plan_for_limits($user_id, ?string $module = null)
+{
+    $activePlan = get_user_active_plan($user_id, $module);
+    if ($activePlan || $module !== 'ecommerce') {
+        return $activePlan;
+    }
+
+    $legacyPlan = provider_subscriptions_valid_query((int) $user_id)
+        ->where(function ($query) {
+            $query->where('module', 'service')
+                ->orWhereNull('module')
+                ->orWhere('module', '');
+        })
+        ->latest('id')
+        ->first();
+
+    return $legacyPlan ? new App\Http\Resources\API\ProviderSubscribeResource($legacyPlan) : null;
+}
+
 function get_customer_active_plan($user_id, $module = null)
 {
     $get_user_plan = user_subscriptions_valid_query((int) $user_id, $module)->latest('id')->first();
@@ -1458,15 +1477,13 @@ function get_provider_plan_limit($provider_id, $type)
     }
 
     $isUserSubscriptionModule = $module === 'classified';
-    $hasActivePlan = $isUserSubscriptionModule
-        ? user_subscriptions_valid_query((int) $provider_id, $module)->exists()
-        : is_any_plan_active($provider_id, $module) == 1;
+    $get_current_plan = $isUserSubscriptionModule
+        ? get_customer_active_plan($provider_id, $module)
+        : get_provider_active_plan_for_limits($provider_id, $module);
+    $hasActivePlan = ! empty($get_current_plan);
 
     if ($hasActivePlan) {
         $exceed = '';
-        $get_current_plan = $isUserSubscriptionModule
-            ? get_customer_active_plan($provider_id, $module)
-            : get_user_active_plan($provider_id, $module);
         // "Unlimited" plans must not enforce per-feature JSON (stale plan_limitation rows were blocking featured posts).
         $planKind = strtolower(trim((string) ($get_current_plan->plan_type ?? '')));
         $catalogPlanId = $get_current_plan->plan_id ?? null;
