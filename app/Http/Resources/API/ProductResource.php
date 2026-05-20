@@ -13,6 +13,15 @@ class ProductResource extends JsonResource
     public function toArray($request)
     {
         $headerValue = $request->header('language-code') ?? session()->get('locale', 'en');
+        $serviceZones = $this->relationLoaded('zones')
+            ? $this->zones->map(function ($zone) {
+                return [
+                    'id' => $zone->id,
+                    'name' => $zone->name,
+                ];
+            })->values()
+            : collect();
+        $serviceZoneIds = $serviceZones->pluck('id')->values();
 
         return [
             'id' => $this->id,
@@ -33,6 +42,11 @@ class ProductResource extends JsonResource
             'city_id' => optional($this->providers)->city_id,
             'category_name' => $this->getTranslation(optional($this->category)->translations, $headerValue, 'name', optional($this->category)->name ?? null) ?? optional($this->category)->name,
             'subcategory_name' => $this->getTranslation(optional($this->subcategory)->translations, $headerValue, 'name', optional($this->subcategory)->name ?? null) ?? optional($this->subcategory)->name,
+            'zone_id' => $serviceZoneIds->first(),
+            'zone_name' => $serviceZones->first()['name'] ?? null,
+            'service_zones' => $serviceZones,
+            'service_zone_ids' => $serviceZoneIds,
+            'zones' => $serviceZones,
             'attchments' => getAttachments($this->getMedia('product_attachment')),
             'product_image' => getSingleMedia($this, 'product_attachment', null),
             'attchments_array' => getAttachmentArray($this->getMedia('product_attachment'), null),
