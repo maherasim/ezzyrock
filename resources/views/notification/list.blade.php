@@ -27,7 +27,10 @@
             $displayId = $data['id'] ?? '';
             $message = $data['message'] ?? __('messages.booking');
 
-            if (isset($data['check_booking_type'])) {
+            if (($data['check_booking_type'] ?? null) === 'product_order') {
+                $route = '#';
+                $displayId = $data['product_order_id'] ?? $data['order_id'] ?? $data['id'] ?? '';
+            } elseif (isset($data['check_booking_type'])) {
                 $route = route('booking.show', $data['id']);
             } elseif (in_array($type, ['promotional_banner', 'promotional_banner_accepted', 'promotional_banner_rejected'])) {
                 $route = route('promotional-banner.show', $data['id']);

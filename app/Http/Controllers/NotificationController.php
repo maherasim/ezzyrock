@@ -37,7 +37,9 @@ class NotificationController extends Controller
             $typeText = isset($data['type']) ? ucfirst(str_replace('_', ' ', $data['type'])) : 'N/A';
             $href = '#';
 
-            if (!empty($data['check_booking_type']) && !empty($data['id'])) {
+            if (($data['check_booking_type'] ?? null) === 'product_order') {
+                $href = '#';
+            } elseif (!empty($data['check_booking_type']) && !empty($data['id'])) {
                 $href = url('booking/' . $data['id']);
             } elseif (!empty($data['helpdesk_id'])) {
                 $href = url('helpdesk/' . $data['helpdesk_id']);
@@ -77,7 +79,9 @@ class NotificationController extends Controller
             $data = $row->data ?? [];
             $href = '#';
 
-            if (!empty($data['check_booking_type']) && !empty($data['id'])) {
+            if (($data['check_booking_type'] ?? null) === 'product_order') {
+                $href = '#';
+            } elseif (!empty($data['check_booking_type']) && !empty($data['id'])) {
                 $href = route('booking.show', $data['id']);
             } elseif (!empty($data['helpdesk_id'])) {
                 $href = route('helpdesk.show', $data['helpdesk_id']);

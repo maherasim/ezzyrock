@@ -943,11 +943,12 @@ class UserProductCartController extends Controller
 
         $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType) {
             try {
-                $provider->notify(new CommonNotification($templateType, [
+                $provider->notifyNow(new CommonNotification($templateType, [
                     'person_id' => $provider->id,
                     'user_type' => $provider->user_type,
                     'type' => 'product_order',
                     'message' => 'New product order has been placed successfully',
+                    'id' => $order->id,
                     'booking_id' => $order->id,
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
