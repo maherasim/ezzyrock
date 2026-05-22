@@ -15,18 +15,23 @@ class NotificationResource extends JsonResource
      */
     public function toArray($request)
     {
-       $image = '';
-        $booking = Booking::where('id',$this->data['id'])->first();
-        if(!empty($booking)){
+        $image = '';
+        $data = is_array($this->data) ? $this->data : [];
+        $bookingId = $data['id'] ?? $data['booking_id'] ?? null;
+
+        if (!empty($bookingId) && ($booking = Booking::find($bookingId))) {
             $user = User::where('id',$booking->customer_id)->first();
-            $image = $user->login_type != null ? $user->social_image: getSingleMedia($user, 'profile_image',null);
+            if (!empty($user)) {
+                $image = $user->login_type != null ? $user->social_image: getSingleMedia($user, 'profile_image',null);
+            }
         }
+
         return [
             'id' => $this->id,
             'read_at' => $this->read_at,
             'profile_image'     => $image,
             'created_at' => timeAgoFormate($this->created_at),
-            'data' => $this->data,
+            'data' => $data,
         ];
     }
 }
