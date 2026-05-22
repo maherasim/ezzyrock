@@ -212,10 +212,16 @@ class ProductController extends Controller
     {
         $query = Category::query()
             ->where('status', 1)
-            ->where('module_type', Category::MODULE_ECOMMERCE);
+            ->where('module_type', Category::MODULE_ECOMMERCE)
+            ->whereHas('products', function ($productQuery) use ($request) {
+                $this->applyAvailableProductFilters($productQuery, $request);
+            });
 
         if ($request->has('is_featured')) {
             $query->where('is_featured', $request->is_featured);
+        }
+        if ($request->filled('q')) {
+            $query->where('name', 'LIKE', '%' . $request->q . '%');
         }
 
         $perPage = $this->resolvePerPage($request, $query);
@@ -235,6 +241,9 @@ class ProductController extends Controller
             ->whereHas('category', function ($q) {
                 $q->where('status', 1)
                     ->where('module_type', Category::MODULE_ECOMMERCE);
+            })
+            ->whereHas('products', function ($productQuery) use ($request) {
+                $this->applyAvailableProductFilters($productQuery, $request);
             });
 
         if ($request->has('is_featured')) {
@@ -242,6 +251,9 @@ class ProductController extends Controller
         }
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
+        }
+        if ($request->filled('q')) {
+            $query->where('name', 'LIKE', '%' . $request->q . '%');
         }
 
         $perPage = $this->resolvePerPage($request, $query);
@@ -556,6 +568,47 @@ class ProductController extends Controller
             $product->price = (float) $activeVariants->min('price');
             $product->total_stock = (int) $activeVariants->sum('stock');
             $product->save();
+        }
+    }
+
+    private function applyAvailableProductFilters($query, Request $request): void
+    {
+        $query->where('products.service_type', 'ecommerce')
+            ->where('products.status', 1)
+            ->where('products.service_request_status', 'approve');
+
+        if (\Schema::hasColumn('products', 'total_stock')) {
+            $query->where('products.total_stock', '>', 0);
+        }
+
+        $query->whereHas('providers', function ($providerQuery) {
+            $providerQuery->where('status', 1);
+        });
+
+        if (default_earning_type() === 'subscription') {
+            $query->whereHas('providers', function ($providerQuery) {
+                $providerQuery->where('status', 1)->where('is_subscribe', 1);
+            });
+        }
+
+        if ($request->has('city_id') && !empty($request->city_id)) {
+            $query->whereHas('providers', function ($providerQuery) use ($request) {
+                $providerQuery->where('city_id', $request->city_id);
+            });
+        }
+
+        if ($request->has('latitude') && !empty($request->latitude) && $request->has('longitude') && !empty($request->longitude)) {
+            $serviceZone = ServiceZone::all();
+            if (count($serviceZone) > 0) {
+                try {
+                    $matchingZoneIds = $this->getMatchingZonesByLatLng($request->latitude, $request->longitude);
+                    $query->whereHas('productZoneMapping', function ($zoneQuery) use ($matchingZoneIds) {
+                        $zoneQuery->whereIn('zone_id', $matchingZoneIds);
+                    });
+                } catch (\Exception $e) {
+                    \Log::error('Product category location filtering error: ' . $e->getMessage());
+                }
+            }
         }
     }
 

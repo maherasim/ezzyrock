@@ -58,7 +58,7 @@ Success response:
 
 ## 2. Product Categories
 
-Use these product-specific endpoints for the mobile product create/edit form. They return only active ecommerce categories, matching `/product/create`.
+Use these product-specific endpoints for the mobile product category filters. They return only active ecommerce categories that currently have available products.
 
 `GET /api/product-category-list`
 
@@ -68,12 +68,15 @@ Query params:
 | --- | --- | --- | --- |
 | `per_page` | integer/string | no | Number per page. Use `all` for no pagination. |
 | `is_featured` | integer | no | Optional `1` or `0` filter. |
+| `q` | string | no | Search by category name, matching the web Select2 search behavior. |
+| `city_id` | integer | no | Filters categories to products from providers in this city. |
+| `latitude` / `longitude` | decimal | no | Filters categories to products available in the matching zone. |
 
 ## 3. Product Subcategories
 
 `GET /api/product-subcategory-list`
 
-Returns only subcategories whose parent category is an active ecommerce category.
+Returns only subcategories whose parent category is an active ecommerce category and that currently have available products.
 
 Query params:
 
@@ -82,6 +85,9 @@ Query params:
 | `category_id` | integer | no | Use after the user selects a product category. |
 | `per_page` | integer/string | no | Number per page. Use `all` for no pagination. |
 | `is_featured` | integer | no | Optional `1` or `0` filter. |
+| `q` | string | no | Search by subcategory name. |
+| `city_id` | integer | no | Filters subcategories to products from providers in this city. |
+| `latitude` / `longitude` | decimal | no | Filters subcategories to products available in the matching zone. |
 
 Do not use the shared `/api/category-list` or `/api/subcategory-list` without `module_type=ecommerce`; those endpoints can return service/classified categories.
 
