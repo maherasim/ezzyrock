@@ -355,8 +355,8 @@ class ProductController extends Controller
 
         if (!$existingProduct) {
             $data['added_by'] = $userId;
-            $data['is_service_request'] = auth()->user()->hasAnyRole(['admin', 'demo_admin']) ? 0 : 1;
-            $data['service_request_status'] = auth()->user()->hasAnyRole(['admin', 'demo_admin']) ? 'approve' : 'pending';
+            $data['is_service_request'] = 0;
+            $data['service_request_status'] = 'approve';
         }
 
         $product = Product::query()->updateOrCreate(['id' => $productId], $data);

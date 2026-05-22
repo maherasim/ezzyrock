@@ -263,11 +263,8 @@ class ProductController extends Controller
         }
         if ($request->id == null) {
             $data['added_by'] = $request->added_by ?: auth()->user()->id;
-            $data['is_service_request'] = 1;
-            if (auth()->user()->hasRole('demo_admin') || auth()->user()->hasRole('admin')) {
-                $data['service_request_status'] = 'approve';
-                $data['is_service_request'] = 0;
-            }
+            $data['service_request_status'] = 'approve';
+            $data['is_service_request'] = 0;
         }
         $data['provider_id'] = $data['provider_id'] ?: auth()->user()->id;
         if (!$request->is('api/*')) {
