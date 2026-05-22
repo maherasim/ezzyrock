@@ -224,6 +224,12 @@ class UserProductCartController extends Controller
         }
         $paymentMethod = (string) $request->payment_method;
 
+        Log::info('Product web checkout started', [
+            'user_id' => $userId,
+            'payment_method' => $paymentMethod,
+            'cart_items' => $items->count(),
+        ]);
+
         $shippingData = [
             'name' => (string) $request->shipping_name,
             'address' => (string) $request->shipping_address,
@@ -304,6 +310,14 @@ class UserProductCartController extends Controller
                 $orderPayload['tax_detail'] = array_values($taxDetail);
             }
             $order = \App\Models\ProductOrder::query()->create($orderPayload);
+            Log::info('Product web checkout order created', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'user_id' => $userId,
+                'payment_method' => $paymentMethod,
+                'total' => $grandTotal,
+                'order_lines' => count($orderLines),
+            ]);
             foreach ($orderLines as $line) {
                 $p = $line['product'];
                 $variant = $line['variant'] ?? null;
@@ -843,6 +857,11 @@ class UserProductCartController extends Controller
 
     private function queueCheckoutProviderNotification(\App\Models\ProductOrder $order): void
     {
+        Log::info('Product web checkout provider notification queued', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+        ]);
+
         DB::afterCommit(function () use ($order) {
             $this->sendCheckoutProviderNotification((int) $order->id);
         });
@@ -855,6 +874,10 @@ class UserProductCartController extends Controller
             ->find($orderId);
 
         if (!$order) {
+            Log::warning('Product web checkout provider notification skipped: order not found', [
+                'order_id' => $orderId,
+            ]);
+
             return;
         }
 
@@ -865,12 +888,24 @@ class UserProductCartController extends Controller
             ->values();
 
         if ($providers->isEmpty()) {
+            Log::warning('Product web checkout provider notification skipped: no providers found', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'items_count' => $order->items->count(),
+            ]);
+
             return;
         }
 
         $customer = $order->user;
         $shipping = json_decode((string) ($order->notes ?? '{}'), true)['shipping'] ?? [];
         $templateType = 'update_booking_status';
+
+        Log::info('Product web checkout provider notification sending', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'provider_ids' => $providers->pluck('id')->values()->all(),
+        ]);
 
         $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType) {
             try {
@@ -903,6 +938,12 @@ class UserProductCartController extends Controller
                     'check_booking_type' => 'product_order',
                     'logged_in_user_role' => 'User',
                 ]));
+                Log::info('Product web checkout provider notification sent', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'provider_id' => $provider->id,
+                    'provider_email' => $provider->email,
+                ]);
             } catch (\Throwable $e) {
                 Log::error('Product web checkout provider notification failed', [
                     'order_id' => $order->id,

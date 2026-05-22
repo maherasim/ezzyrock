@@ -98,6 +98,12 @@ class ProductCartController extends Controller
             return response()->json(['status' => false, 'message' => __('messages.cart_empty')], 422);
         }
 
+        Log::info('Product API checkout started', [
+            'user_id' => $user->id,
+            'payment_method' => $validated['payment_method'] ?? null,
+            'cart_items' => $cartRows->count(),
+        ]);
+
         $shippingData = [
             'name' => (string) $validated['shipping_name'],
             'address' => (string) $validated['shipping_address'],
@@ -125,6 +131,14 @@ class ProductCartController extends Controller
                 $shippingData,
                 $prepared
             );
+            Log::info('Product API checkout order created', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'user_id' => $user->id,
+                'payment_method' => $paymentMethod,
+                'total' => $prepared['grand_total'],
+                'order_lines' => count($prepared['lines']),
+            ]);
 
             foreach ($prepared['lines'] as $line) {
                 $stockError = $this->decrementLineStock($line);
@@ -145,6 +159,11 @@ class ProductCartController extends Controller
             }
 
             DB::afterCommit(function () use ($order) {
+                Log::info('Product API checkout provider notification queued', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                ]);
+
                 $this->sendCheckoutProviderNotification($order->id);
             });
 
@@ -898,6 +917,10 @@ class ProductCartController extends Controller
             ->find($orderId);
 
         if (!$order) {
+            Log::warning('Product API checkout provider notification skipped: order not found', [
+                'order_id' => $orderId,
+            ]);
+
             return;
         }
 
@@ -908,12 +931,24 @@ class ProductCartController extends Controller
             ->values();
 
         if ($providers->isEmpty()) {
+            Log::warning('Product API checkout provider notification skipped: no providers found', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'items_count' => $order->items->count(),
+            ]);
+
             return;
         }
 
         $customer = $order->user;
         $shipping = json_decode((string) ($order->notes ?? '{}'), true)['shipping'] ?? [];
         $templateType = 'update_booking_status';
+
+        Log::info('Product API checkout provider notification sending', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'provider_ids' => $providers->pluck('id')->values()->all(),
+        ]);
 
         $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType) {
             try {
@@ -946,6 +981,12 @@ class ProductCartController extends Controller
                     'check_booking_type' => 'product_order',
                     'logged_in_user_role' => 'User',
                 ]));
+                Log::info('Product API checkout provider notification sent', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'provider_id' => $provider->id,
+                    'provider_email' => $provider->email,
+                ]);
             } catch (\Throwable $e) {
                 Log::error('Product checkout provider notification failed', [
                     'order_id' => $order->id,
