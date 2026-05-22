@@ -20,6 +20,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Razorpay\Api\Api as RazorpayApi;
 
 class UserProductCartController extends Controller
@@ -202,13 +203,29 @@ class UserProductCartController extends Controller
 
     public function checkout(Request $request)
     {
+        $this->checkoutDebugLog('Product web checkout route hit', [
+            'auth_id' => auth()->id(),
+            'method' => $request->method(),
+            'payment_method' => $request->input('payment_method'),
+            'has_shipping_name' => $request->filled('shipping_name'),
+            'has_shipping_address' => $request->filled('shipping_address'),
+            'has_shipping_state' => $request->filled('shipping_state'),
+            'has_shipping_city' => $request->filled('shipping_city'),
+            'has_shipping_pincode' => $request->filled('shipping_pincode'),
+        ]);
+
         $this->ensureCustomer();
         if (! Schema::hasTable('product_cart_items')) {
+            $this->checkoutDebugLog('Product web checkout stopped: product_cart_items table missing', [
+                'auth_id' => auth()->id(),
+            ], 'warning');
+
             return redirect()->route('frontend.index')->withErrors(__('messages.cart_unavailable'));
         }
+
         $allowedPaymentMethods = $this->getAllowedPaymentMethods();
         $indianStates = config('indian_states', []);
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'payment_method' => 'required|string|in:' . implode(',', $allowedPaymentMethods),
             'shipping_name' => 'required|string|max:120',
             'shipping_address' => 'required|string|max:255',
@@ -217,14 +234,33 @@ class UserProductCartController extends Controller
             'shipping_pincode' => 'required|string|max:20',
             'shipping_country' => 'nullable|string|max:80',
         ]);
+
+        if ($validator->fails()) {
+            $this->checkoutDebugLog('Product web checkout validation failed', [
+                'auth_id' => auth()->id(),
+                'payment_method' => $request->input('payment_method'),
+                'allowed_payment_methods' => $allowedPaymentMethods,
+                'errors' => $validator->errors()->toArray(),
+            ], 'warning');
+
+            return redirect()
+                ->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+
         $userId = auth()->id();
         $items = ProductCartItem::query()->where('user_id', $userId)->with(['product', 'variant.option.attribute'])->get();
         if ($items->isEmpty()) {
+            $this->checkoutDebugLog('Product web checkout stopped: cart empty', [
+                'user_id' => $userId,
+            ], 'warning');
+
             return redirect()->route('user.cart')->withErrors(__('messages.cart_empty'));
         }
         $paymentMethod = (string) $request->payment_method;
 
-        Log::info('Product web checkout started', [
+        $this->checkoutDebugLog('Product web checkout started', [
             'user_id' => $userId,
             'payment_method' => $paymentMethod,
             'cart_items' => $items->count(),
@@ -310,7 +346,7 @@ class UserProductCartController extends Controller
                 $orderPayload['tax_detail'] = array_values($taxDetail);
             }
             $order = \App\Models\ProductOrder::query()->create($orderPayload);
-            Log::info('Product web checkout order created', [
+            $this->checkoutDebugLog('Product web checkout order created', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'user_id' => $userId,
@@ -857,7 +893,7 @@ class UserProductCartController extends Controller
 
     private function queueCheckoutProviderNotification(\App\Models\ProductOrder $order): void
     {
-        Log::info('Product web checkout provider notification queued', [
+        $this->checkoutDebugLog('Product web checkout provider notification queued', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
         ]);
@@ -874,9 +910,9 @@ class UserProductCartController extends Controller
             ->find($orderId);
 
         if (!$order) {
-            Log::warning('Product web checkout provider notification skipped: order not found', [
+            $this->checkoutDebugLog('Product web checkout provider notification skipped: order not found', [
                 'order_id' => $orderId,
-            ]);
+            ], 'warning');
 
             return;
         }
@@ -888,11 +924,11 @@ class UserProductCartController extends Controller
             ->values();
 
         if ($providers->isEmpty()) {
-            Log::warning('Product web checkout provider notification skipped: no providers found', [
+            $this->checkoutDebugLog('Product web checkout provider notification skipped: no providers found', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'items_count' => $order->items->count(),
-            ]);
+            ], 'warning');
 
             return;
         }
@@ -901,7 +937,7 @@ class UserProductCartController extends Controller
         $shipping = json_decode((string) ($order->notes ?? '{}'), true)['shipping'] ?? [];
         $templateType = 'update_booking_status';
 
-        Log::info('Product web checkout provider notification sending', [
+        $this->checkoutDebugLog('Product web checkout provider notification sending', [
             'order_id' => $order->id,
             'order_number' => $order->order_number,
             'provider_ids' => $providers->pluck('id')->values()->all(),
@@ -938,21 +974,27 @@ class UserProductCartController extends Controller
                     'check_booking_type' => 'product_order',
                     'logged_in_user_role' => 'User',
                 ]));
-                Log::info('Product web checkout provider notification sent', [
+                $this->checkoutDebugLog('Product web checkout provider notification sent', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
                     'provider_id' => $provider->id,
                     'provider_email' => $provider->email,
                 ]);
             } catch (\Throwable $e) {
-                Log::error('Product web checkout provider notification failed', [
+                $this->checkoutDebugLog('Product web checkout provider notification failed', [
                     'order_id' => $order->id,
                     'template_type' => $templateType,
                     'provider_id' => $provider->id,
                     'error' => $e->getMessage(),
-                ]);
+                ], 'error');
             }
         });
+    }
+
+    private function checkoutDebugLog(string $message, array $context = [], string $level = 'info'): void
+    {
+        Log::log($level, $message, $context);
+        error_log($message . ' ' . json_encode($context));
     }
 
     private function statusLabel(string $status): string

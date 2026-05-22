@@ -105,7 +105,7 @@
                 </table>
             </div>
             <div class="mt-4">
-                <form action="{{ route('user.cart.checkout') }}" method="post">
+                <form action="{{ route('user.cart.checkout') }}" method="post" id="product-checkout-form">
                     @csrf
                     <div class="card border mb-3">
                         <div class="card-body">
@@ -200,6 +200,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const requiredFields = Array.from(document.querySelectorAll('.checkout-required-field'));
     const paymentBox = document.getElementById('payment-options-box');
     const checkoutBtn = document.getElementById('product-checkout-btn');
+    const checkoutForm = document.getElementById('product-checkout-form');
     if (!requiredFields.length || !paymentBox || !checkoutBtn) return;
 
     function toggleCheckoutState() {
@@ -215,6 +216,19 @@ document.addEventListener('DOMContentLoaded', function () {
         el.addEventListener('change', toggleCheckoutState);
     });
     toggleCheckoutState();
+
+    if (checkoutForm) {
+        checkoutForm.addEventListener('submit', function () {
+            const selectedPayment = checkoutForm.querySelector('input[name="payment_method"]:checked');
+            console.log('Product checkout form submitted', {
+                action: checkoutForm.action,
+                payment_method: selectedPayment ? selectedPayment.value : null,
+                fields_ready: requiredFields.every(function (el) {
+                    return String(el.value || '').trim() !== '';
+                })
+            });
+        });
+    }
 
     document.querySelectorAll('.cart-qty-form').forEach(function (form) {
         const input = form.querySelector('.qty-input');
