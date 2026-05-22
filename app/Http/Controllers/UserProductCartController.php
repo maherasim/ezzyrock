@@ -959,7 +959,12 @@ class UserProductCartController extends Controller
 
         $customer = $order->user;
         $shipping = json_decode((string) ($order->notes ?? '{}'), true)['shipping'] ?? [];
-        $templateType = 'update_booking_status';
+        $templateType = 'add_booking';
+        $productNames = $order->items
+            ->pluck('product_name')
+            ->filter()
+            ->unique()
+            ->join(', ');
 
         $this->checkoutDebugLog('Product web checkout provider notification sending', [
             'order_id' => $order->id,
@@ -967,12 +972,15 @@ class UserProductCartController extends Controller
             'provider_ids' => $providers->pluck('id')->values()->all(),
         ]);
 
-        $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType) {
+        $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType, $productNames) {
             try {
-                $provider->notifyNow(new CommonNotification($templateType, [
+                $notificationData = [
                     'person_id' => $provider->id,
                     'user_type' => $provider->user_type,
                     'type' => 'product_order',
+                    'notification-type' => $templateType,
+                    'activity_type' => __('messages.add_booking'),
+                    'activity_slug' => 'add_booking',
                     'message' => 'New product order has been placed successfully',
                     'id' => $order->id,
                     'booking_id' => $order->id,
@@ -991,14 +999,16 @@ class UserProductCartController extends Controller
                     'provider_name' => $provider->display_name ?? '',
                     'handyman_name' => '',
                     'assignee_name' => '',
-                    'booking_services_name' => 'Product Order',
-                    'service_name' => 'Product Order',
+                    'booking_services_name' => $productNames ?: 'Product Order',
+                    'service_name' => $productNames ?: 'Product Order',
                     'booking_date' => optional($order->created_at)->format('Y-m-d') ?? '',
                     'booking_time' => optional($order->created_at)->format('H:i:s') ?? '',
                     'venue_address' => $shipping['address'] ?? '',
                     'check_booking_type' => 'product_order',
                     'logged_in_user_role' => 'User',
-                ]));
+                ];
+
+                $provider->notifyNow(new CommonNotification($templateType, $notificationData));
                 $this->checkoutDebugLog('Product web checkout provider notification sent', [
                     'order_id' => $order->id,
                     'order_number' => $order->order_number,
@@ -1011,6 +1021,16 @@ class UserProductCartController extends Controller
                     ->latest()
                     ->first();
 
+                if (!$notification) {
+                    $notification = $this->createProviderCheckoutNotificationRow($provider, $order, $notificationData);
+                }
+
+                $directNotificationCount = \App\Models\Notification::query()
+                    ->where('notifiable_type', User::class)
+                    ->where('notifiable_id', $provider->id)
+                    ->where('data', 'like', '%"product_order_id":' . $order->id . '%')
+                    ->count();
+
                 $this->checkoutDebugLog($notification
                     ? 'Product web checkout provider notification database row found'
                     : 'Product web checkout provider notification database row missing', [
@@ -1018,6 +1038,9 @@ class UserProductCartController extends Controller
                     'order_number' => $order->order_number,
                     'provider_id' => $provider->id,
                     'notification_id' => $notification?->id,
+                    'notifiable_type' => User::class,
+                    'notifiable_id' => $provider->id,
+                    'direct_table_count' => $directNotificationCount,
                     'provider_unread_count' => $provider->unreadNotifications()->count(),
                 ], $notification ? 'info' : 'warning');
             } catch (\Throwable $e) {
@@ -1029,6 +1052,37 @@ class UserProductCartController extends Controller
                 ], 'error');
             }
         });
+    }
+
+    private function createProviderCheckoutNotificationRow(User $provider, \App\Models\ProductOrder $order, array $notificationData): ?\App\Models\Notification
+    {
+        try {
+            $notification = \App\Models\Notification::query()->create([
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'type' => CommonNotification::class,
+                'notifiable_type' => User::class,
+                'notifiable_id' => $provider->id,
+                'data' => json_encode($notificationData),
+            ]);
+
+            $this->checkoutDebugLog('Product web checkout provider notification fallback row created', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'provider_id' => $provider->id,
+                'notification_id' => $notification->id,
+            ]);
+
+            return $notification;
+        } catch (\Throwable $e) {
+            $this->checkoutDebugLog('Product web checkout provider notification fallback row failed', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'provider_id' => $provider->id,
+                'error' => $e->getMessage(),
+            ], 'error');
+
+            return null;
+        }
     }
 
     private function checkoutDebugLog(string $message, array $context = [], string $level = 'info'): void

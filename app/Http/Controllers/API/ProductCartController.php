@@ -940,7 +940,12 @@ class ProductCartController extends Controller
 
         $customer = $order->user;
         $shipping = json_decode((string) ($order->notes ?? '{}'), true)['shipping'] ?? [];
-        $templateType = 'update_booking_status';
+        $templateType = 'add_booking';
+        $productNames = $order->items
+            ->pluck('product_name')
+            ->filter()
+            ->unique()
+            ->join(', ');
 
         Log::info('Product API checkout provider notification sending', [
             'order_id' => $order->id,
@@ -948,12 +953,15 @@ class ProductCartController extends Controller
             'provider_ids' => $providers->pluck('id')->values()->all(),
         ]);
 
-        $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType) {
+        $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType, $productNames) {
             try {
                 $provider->notifyNow(new CommonNotification($templateType, [
                     'person_id' => $provider->id,
                     'user_type' => $provider->user_type,
                     'type' => 'product_order',
+                    'notification-type' => $templateType,
+                    'activity_type' => __('messages.add_booking'),
+                    'activity_slug' => 'add_booking',
                     'message' => 'New product order has been placed successfully',
                     'id' => $order->id,
                     'booking_id' => $order->id,
@@ -972,8 +980,8 @@ class ProductCartController extends Controller
                     'provider_name' => $provider->display_name ?? '',
                     'handyman_name' => '',
                     'assignee_name' => '',
-                    'booking_services_name' => 'Product Order',
-                    'service_name' => 'Product Order',
+                    'booking_services_name' => $productNames ?: 'Product Order',
+                    'service_name' => $productNames ?: 'Product Order',
                     'booking_date' => optional($order->created_at)->format('Y-m-d') ?? '',
                     'booking_time' => optional($order->created_at)->format('H:i:s') ?? '',
                     'venue_address' => $shipping['address'] ?? '',
