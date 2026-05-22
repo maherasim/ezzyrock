@@ -921,6 +921,14 @@ class ProductController extends Controller
             'created_at' => optional($myReview->created_at)->format('Y-m-d H:i:s'),
             'updated_at' => optional($myReview->updated_at)->format('Y-m-d H:i:s'),
         ] : null;
+        $productData['rating_info'] = [
+            'total_review' => $productData['total_review'],
+            'total_rating' => $productData['total_rating'],
+            'is_rated' => $productData['is_rated'],
+            'can_rate' => $productData['can_rate'],
+            'show_rating_button' => $productData['show_rating_button'],
+            'my_rating' => $productData['my_rating'],
+        ];
         $productData['reviews'] = ProductReviewResource::collection(
             ProductReview::query()
                 ->where('product_id', $product->id)
