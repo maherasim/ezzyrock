@@ -75,7 +75,7 @@ class PostController extends Controller
             });
         }
 
-        if ($request->has('latitude') && !empty($request->latitude) && $request->has('longitude') && !empty($request->longitude)) {
+        if ($this->hasValidLocationCoordinates($request)) {
             $serviceZone = ServiceZone::all();
             if (count($serviceZone) > 0) {
                 try {
@@ -448,5 +448,28 @@ class PostController extends Controller
             'status' => true,
             'message' => __('messages.delete_form', ['form' => __('messages.post')])
         ]);
+    }
+
+    private function hasValidLocationCoordinates(Request $request): bool
+    {
+        if (!$request->filled('latitude') || !$request->filled('longitude')) {
+            return false;
+        }
+
+        if (!is_numeric($request->latitude) || !is_numeric($request->longitude)) {
+            return false;
+        }
+
+        $latitude = (float) $request->latitude;
+        $longitude = (float) $request->longitude;
+
+        if ($latitude === 0.0 && $longitude === 0.0) {
+            return false;
+        }
+
+        return $latitude >= -90
+            && $latitude <= 90
+            && $longitude >= -180
+            && $longitude <= 180;
     }
 }
