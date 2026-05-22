@@ -210,6 +210,52 @@ class ProductController extends Controller
         ]);
     }
 
+    public function getProductCategoryList(Request $request)
+    {
+        $query = Category::query()
+            ->where('status', 1)
+            ->where('module_type', Category::MODULE_ECOMMERCE);
+
+        if ($request->has('is_featured')) {
+            $query->where('is_featured', $request->is_featured);
+        }
+
+        $perPage = $this->resolvePerPage($request, $query);
+        $categories = $query->orderBy('name')->paginate($perPage);
+        $items = CategoryResource::collection($categories);
+
+        return comman_custom_response([
+            'pagination' => $this->paginationPayload($items),
+            'data' => $items,
+        ]);
+    }
+
+    public function getProductSubCategoryList(Request $request)
+    {
+        $query = SubCategory::query()
+            ->where('status', 1)
+            ->whereHas('category', function ($q) {
+                $q->where('status', 1)
+                    ->where('module_type', Category::MODULE_ECOMMERCE);
+            });
+
+        if ($request->has('is_featured')) {
+            $query->where('is_featured', $request->is_featured);
+        }
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        $perPage = $this->resolvePerPage($request, $query);
+        $subcategories = $query->orderByDesc('is_featured')->orderBy('id')->paginate($perPage);
+        $items = SubCategoryResource::collection($subcategories);
+
+        return comman_custom_response([
+            'pagination' => $this->paginationPayload($items),
+            'data' => $items,
+        ]);
+    }
+
     public function saveProduct(Request $request)
     {
         $userId = auth()->id();
@@ -241,11 +287,21 @@ class ProductController extends Controller
             ],
             'category_id' => [
                 'required',
-                Rule::exists('categories', 'id')->where(fn ($q) => $q->where('status', 1)),
+                Rule::exists('categories', 'id')->where(fn ($q) => $q->where('status', 1)->where('module_type', Category::MODULE_ECOMMERCE)),
             ],
             'subcategory_id' => [
                 'nullable',
-                Rule::exists('sub_categories', 'id')->where(fn ($q) => $q->where('category_id', (int) $request->category_id)->where('status', 1)),
+                Rule::exists('sub_categories', 'id')->where(function ($q) use ($request) {
+                    $q->where('category_id', (int) $request->category_id)
+                        ->where('status', 1)
+                        ->whereExists(function ($categoryQuery) {
+                            $categoryQuery->selectRaw('1')
+                                ->from('categories')
+                                ->whereColumn('categories.id', 'sub_categories.category_id')
+                                ->where('categories.status', 1)
+                                ->where('categories.module_type', Category::MODULE_ECOMMERCE);
+                        });
+                }),
             ],
             'type' => 'nullable|string|max:50',
             'price' => 'required|numeric|min:0',
@@ -503,6 +559,34 @@ class ProductController extends Controller
             $product->total_stock = (int) $activeVariants->sum('stock');
             $product->save();
         }
+    }
+
+    private function resolvePerPage(Request $request, $query): int
+    {
+        $perPage = (int) config('constant.PER_PAGE_LIMIT', 15);
+        if ($request->filled('per_page')) {
+            if (is_numeric($request->per_page)) {
+                $perPage = max(1, (int) $request->per_page);
+            } elseif ($request->per_page === 'all') {
+                $perPage = max(1, (int) $query->count());
+            }
+        }
+
+        return $perPage;
+    }
+
+    private function paginationPayload($items): array
+    {
+        return [
+            'total_items' => $items->total(),
+            'per_page' => $items->perPage(),
+            'currentPage' => $items->currentPage(),
+            'totalPages' => $items->lastPage(),
+            'from' => $items->firstItem(),
+            'to' => $items->lastItem(),
+            'next_page' => $items->nextPageUrl(),
+            'previous_page' => $items->previousPageUrl(),
+        ];
     }
 
     private function uploadedProductAttachments(Request $request): array

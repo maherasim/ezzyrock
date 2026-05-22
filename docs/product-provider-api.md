@@ -43,7 +43,7 @@ Success response:
       "max_purchase_qty": 2,
       "product_unit_id": 1,
       "product_unit_name": "Piece",
-      "service_request_status": "pending",
+      "service_request_status": "approve",
       "variants": []
     }
   ],
@@ -56,7 +56,36 @@ Success response:
 }
 ```
 
-## 2. Product Detail for Edit
+## 2. Product Categories
+
+Use these product-specific endpoints for the mobile product create/edit form. They return only active ecommerce categories, matching `/product/create`.
+
+`GET /api/product-category-list`
+
+Query params:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `per_page` | integer/string | no | Number per page. Use `all` for no pagination. |
+| `is_featured` | integer | no | Optional `1` or `0` filter. |
+
+## 3. Product Subcategories
+
+`GET /api/product-subcategory-list`
+
+Returns only subcategories whose parent category is an active ecommerce category.
+
+Query params:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `category_id` | integer | no | Use after the user selects a product category. |
+| `per_page` | integer/string | no | Number per page. Use `all` for no pagination. |
+| `is_featured` | integer | no | Optional `1` or `0` filter. |
+
+Do not use the shared `/api/category-list` or `/api/subcategory-list` without `module_type=ecommerce`; those endpoints can return service/classified categories.
+
+## 4. Product Detail for Edit
 
 `POST /api/product-detail`
 
@@ -105,11 +134,11 @@ Success response:
 }
 ```
 
-## 3. Create Product
+## 5. Create Product
 
 `POST /api/product-save`
 
-Create uses the same behavior as `/product/create`: ecommerce product, provider-owned, status chosen by provider, and request status becomes `pending` for provider users. Admin users can create approved products.
+Create uses the same behavior as `/product/create`: ecommerce product, provider-owned, status chosen by provider, and request status becomes `approve`.
 
 Payload fields:
 
@@ -117,8 +146,8 @@ Payload fields:
 | --- | --- | --- | --- |
 | `name` | string | yes | Unique per provider. |
 | `provider_id` | integer | admin only | Optional. Admin/demo admin can create for another provider; normal providers always use their own account. |
-| `category_id` | integer | yes | Must be an active category. Product is still saved as ecommerce. |
-| `subcategory_id` | integer/null | no | Must belong to `category_id` when supplied. |
+| `category_id` | integer | yes | Must be an active ecommerce category from `/api/product-category-list`. |
+| `subcategory_id` | integer/null | no | Must belong to `category_id` and to an ecommerce category when supplied. |
 | `type` | string | no | Defaults to `fixed`. Web form uses hidden ecommerce product type. |
 | `price` | decimal | yes | Minimum `0`. If variants are sent, product price becomes the minimum variant price. |
 | `discount` | decimal | no | Percentage, `0` to `99`. |
@@ -179,7 +208,7 @@ Success response:
     "price": 1200,
     "total_stock": 20,
     "service_type": "ecommerce",
-    "service_request_status": "pending",
+    "service_request_status": "approve",
     "product_image": "https://example.com/storage/..."
   }
 }
@@ -199,7 +228,7 @@ Validation error:
 }
 ```
 
-## 4. Edit Product
+## 6. Edit Product
 
 `POST /api/product-update`
 
@@ -229,7 +258,7 @@ service_zones[]=1
 
 Success response is the same shape as create, with an update message.
 
-## 5. Delete Product
+## 7. Delete Product
 
 `POST /api/product-delete`
 

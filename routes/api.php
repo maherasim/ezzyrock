@@ -33,6 +33,8 @@ Route::get('category-list', [API\CategoryController::class, 'getCategoryList']);
 Route::get('subcategory-list', [API\SubCategoryController::class, 'getSubCategoryList']);
 Route::get('service-list', [API\ServiceController::class, 'getServiceList']);
 Route::get('product-list', [API\ProductController::class, 'getProductList']);
+Route::get('product-category-list', [API\ProductController::class, 'getProductCategoryList']);
+Route::get('product-subcategory-list', [API\ProductController::class, 'getProductSubCategoryList']);
 Route::get('type-list', [API\CommanController::class, 'getTypeList']);
 Route::get('blog-list', [API\BlogController::class, 'getBlogList']);
 Route::post('blog-detail', [API\BlogController::class, 'getBlogDetail']);
