@@ -236,7 +236,11 @@ class ProductController extends Controller
             ];
         })->values();
 
-        return response()->json($categories);
+        return response()->json([
+            'status' => true,
+            'data' => $categories,
+            'results' => $categories,
+        ]);
     }
 
     public function getProductSubCategoryList(Request $request)
@@ -270,7 +274,11 @@ class ProductController extends Controller
             ];
         })->values();
 
-        return response()->json($subcategories);
+        return response()->json([
+            'status' => true,
+            'data' => $subcategories,
+            'results' => $subcategories,
+        ]);
     }
 
     public function productReviewsList(Request $request)
