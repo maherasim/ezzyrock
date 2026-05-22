@@ -281,11 +281,9 @@ class DashboardController extends Controller
             if (count($serviceZone) > 0) {
                 try {
                     $matchingZoneIds = $this->getMatchingZonesByLatLng($request->latitude, $request->longitude);
-                    if (!empty($matchingZoneIds)) {
-                        $productQuery->whereHas('productZoneMapping', function ($query) use ($matchingZoneIds) {
-                            $query->whereIn('zone_id', $matchingZoneIds);
-                        });
-                    }
+                    $productQuery->whereHas('productZoneMapping', function ($query) use ($matchingZoneIds) {
+                        $query->whereIn('zone_id', $matchingZoneIds);
+                    });
                 } catch (\Exception $e) {
                     \Log::error('Product location filtering error: ' . $e->getMessage());
                 }
@@ -328,11 +326,9 @@ class DashboardController extends Controller
             if (count($serviceZone) > 0) {
                 try {
                     $matchingZoneIds = $this->getMatchingZonesByLatLng($request->latitude, $request->longitude);
-                    if (!empty($matchingZoneIds)) {
-                        $postQuery->whereHas('postZoneMapping', function ($query) use ($matchingZoneIds) {
-                            $query->whereIn('zone_id', $matchingZoneIds);
-                        });
-                    }
+                    $postQuery->whereHas('postZoneMapping', function ($query) use ($matchingZoneIds) {
+                        $query->whereIn('zone_id', $matchingZoneIds);
+                    });
                 } catch (\Exception $e) {
                     \Log::error('Post location filtering error: ' . $e->getMessage());
                 }

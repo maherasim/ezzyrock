@@ -101,11 +101,9 @@ class ProductController extends Controller
             if (count($serviceZone) > 0) {
                 try {
                     $matchingZoneIds = $this->getMatchingZonesByLatLng($latitude, $longitude);
-                    if (!empty($matchingZoneIds)) {
-                        $query->whereHas('productZoneMapping', function ($query) use ($matchingZoneIds) {
-                            $query->whereIn('zone_id', $matchingZoneIds);
-                        });
-                    }
+                    $query->whereHas('productZoneMapping', function ($query) use ($matchingZoneIds) {
+                        $query->whereIn('zone_id', $matchingZoneIds);
+                    });
                 } catch (\Exception $e) {
                     \Log::error('Product location filtering error: ' . $e->getMessage());
                 }

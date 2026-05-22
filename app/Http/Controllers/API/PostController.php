@@ -4,12 +4,16 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Post;
 use App\Models\Category;
+use App\Models\ServiceZone;
 use App\Services\FeaturedPostQuotaService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Traits\ZoneTrait;
 
 class PostController extends Controller
 {
+    use ZoneTrait;
+
     public function getPostList(Request $request)
     {
         $query = Post::where('service_type', 'classified')
@@ -69,6 +73,20 @@ class PostController extends Controller
             $query->whereHas('providers', function ($q) use ($request) {
                 $q->where('city_id', $request->city_id);
             });
+        }
+
+        if ($request->has('latitude') && !empty($request->latitude) && $request->has('longitude') && !empty($request->longitude)) {
+            $serviceZone = ServiceZone::all();
+            if (count($serviceZone) > 0) {
+                try {
+                    $matchingZoneIds = $this->getMatchingZonesByLatLng($request->latitude, $request->longitude);
+                    $query->whereHas('postZoneMapping', function ($q) use ($matchingZoneIds) {
+                        $q->whereIn('zone_id', $matchingZoneIds);
+                    });
+                } catch (\Exception $e) {
+                    \Log::error('Post location filtering error: ' . $e->getMessage());
+                }
+            }
         }
 
         if ($request->has('search') && !empty($request->search)) {
