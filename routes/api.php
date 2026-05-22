@@ -72,6 +72,8 @@ Route::get('service-rating-list', [API\ServiceController::class, 'getServiceRati
 Route::get('user-detail', [API\User\UserController::class, 'userDetail']);
 Route::post('service-detail', [API\ServiceController::class, 'getServiceDetail']);
 Route::post('product-detail', [API\ProductController::class, 'getProductDetail']);
+Route::get('product-rating-list', [API\ProductController::class, 'productReviewsList']);
+Route::post('product-rating-list', [API\ProductController::class, 'productReviewsList']);
 Route::get('post-list', [API\PostController::class, 'getPostList']);
 Route::post('post-detail', [API\PostController::class, 'getPostDetail']);
 Route::get('user-list', [API\User\UserController::class, 'userList']);
@@ -119,6 +121,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('product-save', [API\ProductController::class, 'saveProduct']);
     Route::post('product-update', [API\ProductController::class, 'saveProduct']);
     Route::post('product-delete', [API\ProductController::class, 'deleteProduct']);
+    Route::post('save-product-rating', [API\ProductController::class, 'saveProductRating']);
     Route::get('booking-list', [API\BookingController::class, 'getBookingList']);
     Route::post('booking-detail', [API\BookingController::class, 'getBookingDetail']);
     Route::post('save-booking-rating', [API\BookingController::class, 'saveBookingRating']);

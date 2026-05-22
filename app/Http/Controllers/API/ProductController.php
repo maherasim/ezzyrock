@@ -11,8 +11,10 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\API\ProductResource;
+use App\Http\Resources\API\ProductReviewResource;
 use App\Http\Resources\API\CategoryResource;
 use App\Http\Resources\API\SubCategoryResource;
+use App\Models\ProductReview;
 use App\Models\SubCategory;
 use App\Traits\ZoneTrait;
 use App\Models\ServiceZone;
@@ -261,6 +263,91 @@ class ProductController extends Controller
         return comman_custom_response([
             'pagination' => $this->paginationPayload($items),
             'data' => $items,
+        ]);
+    }
+
+    public function productReviewsList(Request $request)
+    {
+        $validated = $request->validate([
+            'product_id' => 'required|integer|exists:products,id',
+            'per_page' => 'nullable',
+        ]);
+
+        $query = ProductReview::query()
+            ->where('product_id', (int) $validated['product_id'])
+            ->where('status', 1)
+            ->with('user')
+            ->latest();
+
+        $perPage = $request->get('per_page', config('constant.PER_PAGE_LIMIT', 15));
+        $reviews = $perPage === 'all' ? $query->get() : $query->paginate((int) $perPage);
+
+        $summary = ProductReview::query()
+            ->where('product_id', (int) $validated['product_id'])
+            ->where('status', 1)
+            ->selectRaw('COUNT(*) as total_review, COALESCE(AVG(rating), 0) as total_rating')
+            ->first();
+
+        return response()->json([
+            'status' => true,
+            'total_review' => (int) ($summary->total_review ?? 0),
+            'total_rating' => round((float) ($summary->total_rating ?? 0), 2),
+            'data' => ProductReviewResource::collection($reviews),
+            'pagination' => $perPage === 'all' ? null : [
+                'total_items' => $reviews->total(),
+                'per_page' => $reviews->perPage(),
+                'currentPage' => $reviews->currentPage(),
+                'totalPages' => $reviews->lastPage(),
+            ],
+        ]);
+    }
+
+    public function saveProductRating(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || $user->user_type !== 'user') {
+            return response()->json(['status' => false, 'message' => 'Only customer accounts can rate products.'], 403);
+        }
+
+        $validated = $request->validate([
+            'product_id' => [
+                'required',
+                'integer',
+                Rule::exists('products', 'id')->where(fn ($q) => $q
+                    ->where('service_type', 'ecommerce')
+                    ->where('status', 1)
+                    ->where('service_request_status', 'approve')),
+            ],
+            'rating' => 'required|numeric|min:1|max:5',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        $review = ProductReview::query()->updateOrCreate(
+            [
+                'product_id' => (int) $validated['product_id'],
+                'user_id' => $user->id,
+            ],
+            [
+                'rating' => round((float) $validated['rating'], 1),
+                'comment' => $validated['comment'] ?? null,
+                'status' => 1,
+            ]
+        );
+
+        $review->load('user');
+
+        $summary = ProductReview::query()
+            ->where('product_id', (int) $validated['product_id'])
+            ->where('status', 1)
+            ->selectRaw('COUNT(*) as total_review, COALESCE(AVG(rating), 0) as total_rating')
+            ->first();
+
+        return response()->json([
+            'status' => true,
+            'message' => __('messages.save_form', ['form' => __('messages.review')]),
+            'data' => new ProductReviewResource($review),
+            'total_review' => (int) ($summary->total_review ?? 0),
+            'total_rating' => round((float) ($summary->total_rating ?? 0), 2),
         ]);
     }
 
