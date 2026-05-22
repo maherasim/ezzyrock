@@ -14,8 +14,11 @@ use App\Models\Setting;
 use App\Models\Tax;
 use App\Models\Wallet;
 use App\Models\WalletHistory;
+use App\Models\User;
+use App\Notifications\CommonNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Razorpay\Api\Api as RazorpayApi;
@@ -140,6 +143,10 @@ class ProductCartController extends Controller
                     'line_total' => $line['line_total'],
                 ]);
             }
+
+            DB::afterCommit(function () use ($order) {
+                $this->sendCheckoutProviderNotification($order->id);
+            });
 
             if ($paymentMethod === 'wallet') {
                 $wallet = Wallet::query()->where('user_id', $user->id)->first();
@@ -882,6 +889,81 @@ class ProductCartController extends Controller
             $order->txn_id = $txnId;
         }
         $order->save();
+    }
+
+    private function sendCheckoutProviderNotification(int $orderId): void
+    {
+        $order = ProductOrder::query()
+            ->with(['items.product.providers', 'user'])
+            ->find($orderId);
+
+        if (!$order) {
+            return;
+        }
+
+        $providers = $order->items
+            ->map(fn ($item) => $item->product?->providers)
+            ->filter()
+            ->unique('id')
+            ->values();
+
+        if ($providers->isEmpty()) {
+            return;
+        }
+
+        $customer = $order->user;
+        $shipping = json_decode((string) ($order->notes ?? '{}'), true)['shipping'] ?? [];
+        $templateType = 'update_booking_status';
+
+        $providers->each(function (User $provider) use ($order, $customer, $shipping, $templateType) {
+            try {
+                $provider->notify(new CommonNotification($templateType, [
+                    'person_id' => $provider->id,
+                    'user_type' => $provider->user_type,
+                    'type' => 'product_order',
+                    'message' => 'New product order has been placed successfully',
+                    'booking_id' => $order->id,
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'product_order_id' => $order->id,
+                    'booking_status' => $this->statusLabel((string) $order->status),
+                    'old_status' => '',
+                    'payment_status' => $order->payment_status ?? '',
+                    'payment_type' => $order->payment_type ?? '',
+                    'pay_amount' => getPriceFormat($order->total ?? 0),
+                    'customer_name' => $customer?->display_name ?? '',
+                    'user_name' => $customer?->display_name ?? '',
+                    'user_email' => $customer?->email ?? '',
+                    'user_contact' => $customer?->contact_number ?? '',
+                    'provider_name' => $provider->display_name ?? '',
+                    'handyman_name' => '',
+                    'assignee_name' => '',
+                    'booking_services_name' => 'Product Order',
+                    'service_name' => 'Product Order',
+                    'booking_date' => optional($order->created_at)->format('Y-m-d') ?? '',
+                    'booking_time' => optional($order->created_at)->format('H:i:s') ?? '',
+                    'venue_address' => $shipping['address'] ?? '',
+                    'check_booking_type' => 'product_order',
+                    'logged_in_user_role' => 'User',
+                ]));
+            } catch (\Throwable $e) {
+                Log::error('Product checkout provider notification failed', [
+                    'order_id' => $order->id,
+                    'template_type' => $templateType,
+                    'provider_id' => $provider->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
+    }
+
+    private function statusLabel(string $status): string
+    {
+        if ($status === '') {
+            return '';
+        }
+
+        return ucwords(str_replace('_', ' ', $status));
     }
 
     private function serializeOrder(ProductOrder $order): array
