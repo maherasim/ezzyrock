@@ -12,7 +12,7 @@ class PlanController extends Controller
 {
     public function planList(Request $request)
     {
-        $plans = Plans::where('status', 1)->where('module', subscription_billing_plan_module());
+        $plans = Plans::with('planlimit')->where('status', 1)->where('module', subscription_billing_plan_module());
         $get_user_free_plan = ProviderSubscription::where('user_id',auth()->id())->first();
         if(!empty( $get_user_free_plan)){
             $plans =  $plans->whereNotIn('identifier',['free']);
