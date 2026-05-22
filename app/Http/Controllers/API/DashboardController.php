@@ -37,6 +37,7 @@ use App\Models\{
     ServiceZone,
     Shop,
     LoyaltyReferralRule,
+    ProductOrder,
 };
 use App\Http\Resources\API\{
     BookingResource,
@@ -546,6 +547,17 @@ class DashboardController extends Controller
 
         $service = Service::myService()->where('status', 1);
         $total_service = $service->count();
+        $total_product = Product::query()
+            ->where('provider_id', $provider->id)
+            ->where('service_type', 'ecommerce')
+            ->count();
+        $total_product_order = Schema::hasTable('product_orders')
+            ? ProductOrder::query()
+                ->whereHas('items.product', function ($query) use ($provider) {
+                    $query->where('provider_id', $provider->id);
+                })
+                ->count()
+            : 0;
 
         if ($request->has('city_id') && !empty($request->city_id)) {
             $service = $service->whereHas('providers', function ($a) use ($request) {
@@ -637,6 +649,8 @@ class DashboardController extends Controller
             'status'         => true,
             'total_booking'  => $total_booking,
             'total_service'  => $total_service,
+            'total_product'  => $total_product,
+            'total_product_order' => $total_product_order,
             'total_active_handyman' => $total_active_handyman->count(),
             'total_cash_in_hand'     => total_cash_in_hand(auth()->user()->id),
             'service'        => $service,
