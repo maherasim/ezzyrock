@@ -214,6 +214,7 @@ class ProductController extends Controller
     public function getProductCategoryList(Request $request)
     {
         $query = Category::query()
+            ->select('id', 'name as text')
             ->where('status', 1)
             ->where('module_type', Category::MODULE_ECOMMERCE);
 
@@ -224,26 +225,28 @@ class ProductController extends Controller
             $query->where('name', 'LIKE', '%' . $request->q . '%');
         }
 
-        $perPage = $this->resolvePerPage($request, $query);
-        $categories = $query->orderBy('name')->paginate($perPage);
-        $items = CategoryResource::collection($categories);
+        $languageId = $request->input('language_id', $request->header('language-code', 'en'));
+        $categories = $query->orderBy('name')->get()->map(function ($category) use ($languageId) {
+            $translatedName = $category->translate('name', $languageId);
+            $category->text = $translatedName ?: $category->text;
 
-        return comman_custom_response([
-            'pagination' => $this->paginationPayload($items),
-            'data' => $items,
-        ]);
+            return [
+                'id' => $category->id,
+                'text' => $category->text,
+            ];
+        })->values();
+
+        return response()->json($categories);
     }
 
     public function getProductSubCategoryList(Request $request)
     {
         $query = SubCategory::query()
+            ->select('id', 'name as text', 'category_id')
             ->where('status', 1)
             ->whereHas('category', function ($q) {
                 $q->where('status', 1)
                     ->where('module_type', Category::MODULE_ECOMMERCE);
-            })
-            ->whereHas('products', function ($productQuery) use ($request) {
-                $this->applyAvailableProductFilters($productQuery, $request);
             });
 
         if ($request->has('is_featured')) {
@@ -256,14 +259,18 @@ class ProductController extends Controller
             $query->where('name', 'LIKE', '%' . $request->q . '%');
         }
 
-        $perPage = $this->resolvePerPage($request, $query);
-        $subcategories = $query->orderByDesc('is_featured')->orderBy('id')->paginate($perPage);
-        $items = SubCategoryResource::collection($subcategories);
+        $languageId = $request->input('language_id', $request->header('language-code', 'en'));
+        $subcategories = $query->orderByDesc('is_featured')->orderBy('id')->get()->map(function ($subcategory) use ($languageId) {
+            $translatedName = $subcategory->translate('name', $languageId);
+            $subcategory->text = $translatedName ?: $subcategory->text;
 
-        return comman_custom_response([
-            'pagination' => $this->paginationPayload($items),
-            'data' => $items,
-        ]);
+            return [
+                'id' => $subcategory->id,
+                'text' => $subcategory->text,
+            ];
+        })->values();
+
+        return response()->json($subcategories);
     }
 
     public function productReviewsList(Request $request)
@@ -836,7 +843,10 @@ class ProductController extends Controller
     public function getProductDetail(Request $request)
     {
         $id = $request->product_id ?? $request->id;
-        $product = Product::with(['providers', 'category', 'subcategory', 'translations', 'zones', 'shops', 'variants.option.attribute', 'productUnit'])->find($id);
+        $product = Product::with(['providers', 'category', 'subcategory', 'translations', 'zones', 'shops', 'variants.option.attribute', 'productUnit'])
+            ->withCount(['reviews' => fn ($query) => $query->where('status', 1)])
+            ->withAvg(['reviews' => fn ($query) => $query->where('status', 1)], 'rating')
+            ->find($id);
         if (!$product) {
             return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
         }
@@ -880,6 +890,38 @@ class ProductController extends Controller
         $productData['variants'] = $activeVariants;
         $productData['product_unit_id'] = $product->product_unit_id;
         $productData['product_unit_name'] = optional($product->productUnit)->name;
+        $productData['total_review'] = (int) ($product->reviews_count ?? 0);
+        $productData['total_rating'] = $product->reviews_avg_rating ? (float) number_format($product->reviews_avg_rating, 2) : 0;
+
+        $customerId = $request->customer_id ?: auth()->id();
+        $myReview = null;
+        if ($customerId) {
+            $myReview = ProductReview::query()
+                ->where('product_id', $product->id)
+                ->where('user_id', (int) $customerId)
+                ->first();
+        }
+
+        $productData['is_rated'] = $myReview !== null;
+        $productData['can_rate'] = $myReview === null;
+        $productData['show_rating_button'] = $myReview === null;
+        $productData['my_rating'] = $myReview ? [
+            'id' => $myReview->id,
+            'rating' => (float) $myReview->rating,
+            'comment' => $myReview->comment,
+            'status' => (int) $myReview->status,
+            'created_at' => optional($myReview->created_at)->format('Y-m-d H:i:s'),
+            'updated_at' => optional($myReview->updated_at)->format('Y-m-d H:i:s'),
+        ] : null;
+        $productData['reviews'] = ProductReviewResource::collection(
+            ProductReview::query()
+                ->where('product_id', $product->id)
+                ->where('status', 1)
+                ->with('user')
+                ->latest()
+                ->take(10)
+                ->get()
+        );
 
         return response()->json([
             'status' => true,

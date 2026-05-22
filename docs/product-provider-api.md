@@ -351,3 +351,183 @@ Unauthorized response:
   "message": "Unauthorized"
 }
 ```
+
+
+https://ezzyrock.com/ajax-list?type=category&language_id=en&module_type=ecommerce&ids%5B%5D=
+Request Method
+GET
+Status Code
+[
+    {
+        "id": 46,
+        "text": "Mobiles"
+    },
+    {
+        "id": 47,
+        "text": "Audio Devices"
+    },
+    {
+        "id": 48,
+        "text": "Mobile Accessories"
+    },
+    {
+        "id": 49,
+        "text": "Laptops & Tablets"
+    },
+    {
+        "id": 50,
+        "text": "Computer Accessories"
+    },
+    {
+        "id": 51,
+        "text": "Smart Home Devices"
+    },
+    {
+        "id": 52,
+        "text": "Electronics"
+    },
+    {
+        "id": 53,
+        "text": "Gaming Electronics"
+    },
+    {
+        "id": 54,
+        "text": "Appliances"
+    },
+    {
+        "id": 55,
+        "text": "Car Electronics"
+    },
+    {
+        "id": 56,
+        "text": "Gadgets"
+    },
+    {
+        "id": 68,
+        "text": "Pain Relief & Fever"
+    },
+    {
+        "id": 69,
+        "text": "Cold, Cough & Flu"
+    },
+    {
+        "id": 70,
+        "text": "Skin Care (Medical + OTC)"
+    },
+    {
+        "id": 71,
+        "text": "Hair Care (Treatment Based)"
+    },
+    {
+        "id": 72,
+        "text": "Oral Care"
+    },
+    {
+        "id": 73,
+        "text": "Vitamins & Supplements"
+    },
+    {
+        "id": 74,
+        "text": "Brain, Nerve & Energy Care"
+    },
+    {
+        "id": 75,
+        "text": "Personal Hygiene & Daily Care"
+    },
+    {
+        "id": 76,
+        "text": "First Aid Essentials"
+    },
+    {
+        "id": 77,
+        "text": "Medical Devices"
+    },
+    {
+        "id": 78,
+        "text": "Baby Care"
+    },
+    {
+        "id": 79,
+        "text": "Women\u2019s Health \/ Feminine Care"
+    },
+    {
+        "id": 80,
+        "text": "Fitness & Nutrition"
+    },
+    {
+        "id": 81,
+        "text": "Digestive & Stomach Care"
+    },
+    {
+        "id": 82,
+        "text": "Ayurvedic & Herbal"
+    },
+    {
+        "id": 83,
+        "text": "Sexual Wellness"
+    },
+    {
+        "id": 84,
+        "text": "Elderly Care"
+    },
+    {
+        "id": 85,
+        "text": "Chronic Disease Care"
+    },
+    {
+        "id": 86,
+        "text": "Seasonal \/ Preventive Care"
+    },
+    {
+        "id": 87,
+        "text": "Skincare"
+    },
+    {
+        "id": 88,
+        "text": "Makeup"
+    },
+    {
+        "id": 89,
+        "text": "Bath & Body"
+    },
+    {
+        "id": 90,
+        "text": "Fragrance & Perfume"
+    },
+    {
+        "id": 91,
+        "text": "Grooming & Hygiene"
+    },
+    {
+        "id": 92,
+        "text": "Beauty Tools"
+    }
+]     
+https://ezzyrock.com/ajax-list?type=subcategory&category_id=47&language_id=en&ids%5B%5D=
+Request Method
+GET  [
+    {
+        "id": 193,
+        "text": "Wired earphones"
+    },
+    {
+        "id": 194,
+        "text": "Wireless earbuds (TWS)"
+    },
+    {
+        "id": 195,
+        "text": "Neckbands"
+    },
+    {
+        "id": 196,
+        "text": "Headphones"
+    },
+    {
+        "id": 197,
+        "text": "Bluetooth speakers"
+    },
+    {
+        "id": 198,
+        "text": "Soundbars"
+    }
+]

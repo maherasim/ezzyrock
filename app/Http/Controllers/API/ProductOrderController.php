@@ -8,6 +8,7 @@ use App\Models\ProductOrderAssignment;
 use App\Models\ProductOrder;
 use App\Models\ProductOrderLiveLocation;
 use App\Models\ProductOrderProof;
+use App\Models\ProductReview;
 use App\Models\User;
 use App\Notifications\CommonNotification;
 use Illuminate\Http\Request;
@@ -594,6 +595,15 @@ class ProductOrderController extends Controller
     private function serializeOrderItem($item): array
     {
         $product = $item->product;
+        $userId = auth()->id();
+        $review = null;
+
+        if ($userId && $item->product_id) {
+            $review = ProductReview::query()
+                ->where('product_id', $item->product_id)
+                ->where('user_id', $userId)
+                ->first();
+        }
 
         return [
             'id' => $item->id,
@@ -606,6 +616,17 @@ class ProductOrderController extends Controller
             'quantity' => (int) $item->quantity,
             'line_total' => (float) $item->line_total,
             'line_total_format' => getPriceFormat($item->line_total),
+            'can_rate' => $review === null,
+            'show_rating_button' => $review === null,
+            'is_rated' => $review !== null,
+            'rating' => $review ? [
+                'id' => $review->id,
+                'rating' => (float) $review->rating,
+                'comment' => $review->comment,
+                'status' => (int) $review->status,
+                'created_at' => optional($review->created_at)->format('Y-m-d H:i:s'),
+                'updated_at' => optional($review->updated_at)->format('Y-m-d H:i:s'),
+            ] : null,
             'product' => $product ? [
                 'id' => $product->id,
                 'name' => $product->name,
