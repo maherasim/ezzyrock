@@ -292,7 +292,8 @@ class DashboardController extends Controller
             }
         }
 
-        $product = ProductResource::collection($productQuery->paginate($per_page));
+        $productPerPage = $this->resolveDashboardPerPage($request, $productQuery, 'product_per_page', 10);
+        $product = ProductResource::collection($productQuery->paginate($productPerPage));
 
         // Classified posts for landing home block
         $postQuery = Post::query()
@@ -660,6 +661,22 @@ class DashboardController extends Controller
 
         return comman_custom_response($response);
     }
+
+    private function resolveDashboardPerPage(Request $request, $query, string $key, int $default): int
+    {
+        $value = $request->input($key, $request->input('per_page'));
+
+        if (is_numeric($value)) {
+            return max(1, (int) $value);
+        }
+
+        if ($value === 'all') {
+            return max(1, (int) $query->count());
+        }
+
+        return $default;
+    }
+
     public function handymanDashboard(Request $request)
     {
         $per_page = config('constant.PER_PAGE_LIMIT');
