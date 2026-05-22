@@ -213,10 +213,7 @@ class ProductController extends Controller
     {
         $query = Category::query()
             ->where('status', 1)
-            ->where('module_type', Category::MODULE_ECOMMERCE)
-            ->whereHas('products', function ($productQuery) use ($request) {
-                $this->applyAvailableProductFilters($productQuery, $request);
-            });
+            ->where('module_type', Category::MODULE_ECOMMERCE);
 
         if ($request->has('is_featured')) {
             $query->where('is_featured', $request->is_featured);
