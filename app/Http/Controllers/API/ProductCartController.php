@@ -158,14 +158,12 @@ class ProductCartController extends Controller
                 ]);
             }
 
-            DB::afterCommit(function () use ($order) {
-                Log::info('Product API checkout provider notification queued', [
-                    'order_id' => $order->id,
-                    'order_number' => $order->order_number,
-                ]);
+            Log::info('Product API checkout provider notification queued', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+            ]);
 
-                $this->sendCheckoutProviderNotification($order->id);
-            });
+            $this->sendCheckoutProviderNotification($order->id);
 
             if ($paymentMethod === 'wallet') {
                 $wallet = Wallet::query()->where('user_id', $user->id)->first();

@@ -898,9 +898,7 @@ class UserProductCartController extends Controller
             'order_number' => $order->order_number,
         ]);
 
-        DB::afterCommit(function () use ($order) {
-            $this->sendCheckoutProviderNotification((int) $order->id);
-        });
+        $this->sendCheckoutProviderNotification((int) $order->id);
     }
 
     private function sendCheckoutProviderNotification(int $orderId): void
