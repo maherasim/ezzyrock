@@ -363,6 +363,13 @@ class UserProductCartController extends Controller
                         ->where('stock', '>=', (int) $line['quantity'])
                         ->decrement('stock', (int) $line['quantity']);
                     if (! $affectedVariant) {
+                        $this->checkoutDebugLog('Product web checkout stopped: variant stock changed', [
+                            'order_id' => $order->id,
+                            'product_id' => $p->id,
+                            'variant_id' => $variant->id,
+                            'quantity' => (int) $line['quantity'],
+                        ], 'warning');
+
                         return redirect()->route('user.cart')->withErrors('Product option stock changed. Please update cart.');
                     }
                 }
@@ -372,6 +379,12 @@ class UserProductCartController extends Controller
                         ->where('total_stock', '>=', (int) $line['quantity'])
                         ->decrement('total_stock', (int) $line['quantity']);
                     if (! $affected) {
+                        $this->checkoutDebugLog('Product web checkout stopped: product stock changed', [
+                            'order_id' => $order->id,
+                            'product_id' => $p->id,
+                            'quantity' => (int) $line['quantity'],
+                        ], 'warning');
+
                         return redirect()->route('user.cart')->withErrors(__('messages.product_not_found'));
                     }
                 }
@@ -391,10 +404,23 @@ class UserProductCartController extends Controller
                 $wallet = Wallet::query()->where('user_id', $userId)->first();
                 $walletAmount = $wallet ? (float) $wallet->amount : 0.0;
                 if ($walletAmount < $grandTotal) {
+                    $this->checkoutDebugLog('Product web checkout stopped: wallet balance insufficient', [
+                        'order_id' => $order->id,
+                        'user_id' => $userId,
+                        'wallet_amount' => $walletAmount,
+                        'order_total' => $grandTotal,
+                    ], 'warning');
+
                     return redirect()->route('user.cart')->withErrors(__('messages.wallent_balance_error'));
                 }
                 $wallet->amount = round($walletAmount - $grandTotal, 2);
                 $wallet->save();
+                $this->checkoutDebugLog('Product web checkout wallet debited', [
+                    'order_id' => $order->id,
+                    'user_id' => $userId,
+                    'wallet_before' => $walletAmount,
+                    'wallet_after' => (float) $wallet->amount,
+                ]);
                 if (Schema::hasColumn('product_orders', 'status')) {
                     $order->status = 'confirmed';
                 }
@@ -979,6 +1005,21 @@ class UserProductCartController extends Controller
                     'provider_id' => $provider->id,
                     'provider_email' => $provider->email,
                 ]);
+
+                $notification = $provider->notifications()
+                    ->where('data->product_order_id', $order->id)
+                    ->latest()
+                    ->first();
+
+                $this->checkoutDebugLog($notification
+                    ? 'Product web checkout provider notification database row found'
+                    : 'Product web checkout provider notification database row missing', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'provider_id' => $provider->id,
+                    'notification_id' => $notification?->id,
+                    'provider_unread_count' => $provider->unreadNotifications()->count(),
+                ], $notification ? 'info' : 'warning');
             } catch (\Throwable $e) {
                 $this->checkoutDebugLog('Product web checkout provider notification failed', [
                     'order_id' => $order->id,
