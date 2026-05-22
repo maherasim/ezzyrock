@@ -39,17 +39,35 @@
                                 </div>
 
                                 <div class="form-group col-md-12">
+                                    <label class="form-control-label" for="youtube_url">
+                                        YouTube Link @if(!$video->youtube_url && !$video->getFirstMedia('site_video'))<span class="text-danger">*</span>@endif
+                                    </label>
+                                    <input type="url" name="youtube_url" id="youtube_url" class="form-control" value="{{ old('youtube_url', $video->youtube_url) }}" placeholder="https://www.youtube.com/watch?v=VIDEO_ID">
+                                    <small class="text-muted d-block mt-1">Paste a YouTube video link. If provided, it replaces the uploaded video.</small>
+                                </div>
+
+                                <div class="form-group col-md-12">
                                     <label class="form-control-label" for="video">
-                                        {{ __('messages.video') }} @if(!$video->getFirstMedia('site_video'))<span class="text-danger">*</span>@endif
+                                        {{ __('messages.video') }}
                                     </label>
                                     <input type="file" name="video" id="video" class="form-control" accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska">
-                                    <small class="text-muted d-block mt-1">Allowed: mp4, mov, avi, webm, mkv. Max 100 MB. Uploading a new video replaces the old video.</small>
+                                    <small class="text-muted d-block mt-1">Optional fallback. Allowed: mp4, mov, avi, webm, mkv. Max 100 MB. Clear the YouTube link to use an uploaded file.</small>
                                 </div>
 
                                 @php
                                     $media = $video->getFirstMedia('site_video');
                                 @endphp
-                                @if($media)
+                                @if($video->youtube_url)
+                                    <div class="form-group col-md-12">
+                                        <label class="form-control-label">{{ __('messages.current_video') }}</label>
+                                        <div class="ratio ratio-16x9 rounded border overflow-hidden">
+                                            <iframe src="https://www.youtube.com/embed/{{ $video->youtube_video_id }}" title="{{ $video->title }}" allowfullscreen></iframe>
+                                        </div>
+                                        <div class="mt-2">
+                                            <a href="{{ $video->youtube_url }}" target="_blank">{{ $video->youtube_url }}</a>
+                                        </div>
+                                    </div>
+                                @elseif($media)
                                     <div class="form-group col-md-12">
                                         <label class="form-control-label">{{ __('messages.current_video') }}</label>
                                         <video controls class="w-100 rounded border" style="max-height: 420px;">

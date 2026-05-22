@@ -13,6 +13,9 @@ class SiteVideo extends Model implements HasMedia
     protected $fillable = [
         'title',
         'status',
+        'video_type',
+        'youtube_url',
+        'youtube_video_id',
         'created_by',
         'updated_by',
     ];
