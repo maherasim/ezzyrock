@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Models\ProductAttribute;
 use App\Models\ProductAttributeOption;
+use App\Models\ProductUnit;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -266,6 +267,48 @@ class ProductController extends Controller
         ]);
     }
 
+    public function getProductFormConfig(Request $request)
+    {
+        $attributes = ProductAttribute::query()
+            ->where('status', true)
+            ->with(['options' => function ($query) {
+                $query->where('status', true)->orderBy('value');
+            }])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($attribute) {
+                return [
+                    'id' => $attribute->id,
+                    'name' => $attribute->name,
+                    'options' => $attribute->options->map(function ($option) {
+                        return [
+                            'id' => $option->id,
+                            'value' => $option->value,
+                        ];
+                    })->values(),
+                ];
+            });
+
+        $units = ProductUnit::query()
+            ->where('status', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'attributes' => $attributes,
+                'units' => $units,
+                'variant_payload' => [
+                    'product_attribute_id' => 'required when variants are used',
+                    'variant_labels' => 'array of option values, e.g. Small/Medium/Large',
+                    'variant_price' => 'array matching variant_labels order',
+                    'variant_stock' => 'array matching variant_labels order',
+                ],
+            ],
+        ]);
+    }
+
     public function saveProduct(Request $request)
     {
         $userId = auth()->id();
@@ -319,14 +362,22 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:5000',
             'total_stock' => 'required|integer|min:0',
             'max_purchase_qty' => 'nullable|integer|min:1',
-            'product_unit_id' => 'nullable|integer|exists:product_units,id',
+            'product_unit_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('product_units', 'id')->where(fn ($q) => $q->where('status', true)),
+            ],
             'status' => 'required|in:0,1',
             'is_featured' => 'nullable|boolean',
             'service_zones' => 'required|array|min:1',
             'service_zones.*' => ['integer', Rule::exists('service_zones', 'id')->where(fn ($q) => $q->where('status', true))],
             'shop_ids' => 'nullable|array',
             'shop_ids.*' => 'integer|exists:shops,id',
-            'product_attribute_id' => 'nullable|integer|exists:product_attributes,id',
+            'product_attribute_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('product_attributes', 'id')->where(fn ($q) => $q->where('status', true)),
+            ],
             'variant_labels' => 'nullable|array',
             'variant_labels.*' => 'nullable|string|max:255',
             'variant_price' => 'nullable|array',

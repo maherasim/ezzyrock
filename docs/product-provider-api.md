@@ -91,7 +91,65 @@ Query params:
 
 Do not use the shared `/api/category-list` or `/api/subcategory-list` without `module_type=ecommerce`; those endpoints can return service/classified categories.
 
-## 4. Product Detail for Edit
+## 4. Product Form Config
+
+`GET /api/product-form-config`
+
+Use this before rendering the mobile create/edit product form. It returns the same active product variant attributes and product units used by `/product/create`.
+
+Success response:
+
+```json
+{
+  "status": true,
+  "data": {
+    "attributes": [
+      {
+        "id": 4,
+        "name": "Color",
+        "options": [
+          { "id": 8, "value": "Blue" },
+          { "id": 9, "value": "Red" }
+        ]
+      }
+    ],
+    "units": [
+      { "id": 1, "name": "Piece" }
+    ],
+    "variant_payload": {
+      "product_attribute_id": "required when variants are used",
+      "variant_labels": "array of option values, e.g. Small/Medium/Large",
+      "variant_price": "array matching variant_labels order",
+      "variant_stock": "array matching variant_labels order"
+    }
+  }
+}
+```
+
+Variant behavior is intentionally the same as the web form:
+
+| Step | Mobile behavior |
+| --- | --- |
+| Select attribute | User chooses one active attribute, for example `Color` or `Size`. Send its id as `product_attribute_id`. |
+| Enter values | User enters labels/tags, for example `Blue`, `Red`, `Green`. Send those as `variant_labels[]`. |
+| Enter rows | For every label, send one `variant_price[]` and one `variant_stock[]` in the same order. |
+| Save | The API reuses an existing option with the same label under that attribute, or creates it if missing. |
+| Product totals | If variants are sent, product `price` becomes the minimum variant price and `total_stock` becomes the sum of variant stock. |
+| Remove variants | On update, sending no variant labels removes all variants for that product. |
+
+Example variant payload:
+
+```text
+product_attribute_id=4
+variant_labels[]=Blue
+variant_price[]=1200
+variant_stock[]=5
+variant_labels[]=Red
+variant_price[]=1250
+variant_stock[]=3
+```
+
+## 5. Product Detail for Edit
 
 `POST /api/product-detail`
 
@@ -140,7 +198,7 @@ Success response:
 }
 ```
 
-## 5. Create Product
+## 6. Create Product
 
 `POST /api/product-save`
 
@@ -160,12 +218,12 @@ Payload fields:
 | `description` | string | no | Product details. |
 | `total_stock` | integer | yes | Minimum `0`. If variants are sent, total stock becomes the sum of variant stock. |
 | `max_purchase_qty` | integer/null | no | Maximum quantity allowed in one order. Minimum `1`. |
-| `product_unit_id` | integer/null | no | Must exist in `product_units`. |
+| `product_unit_id` | integer/null | no | Must be an active unit from `/api/product-form-config`. |
 | `status` | integer | yes | `1` active, `0` inactive. |
 | `is_featured` | boolean/integer | no | `1` featured, `0` normal. Feature quota is checked. |
 | `service_zones[]` | integer array | yes | Active zone ids. The web page requires at least one zone. |
 | `shop_ids[]` | integer array | no | Shop ids to attach to the product. |
-| `product_attribute_id` | integer/null | no | Required only when variants are used. |
+| `product_attribute_id` | integer/null | no | Required only when variants are used. Must be an active attribute from `/api/product-form-config`. |
 | `variant_labels[]` | string array | no | Example: `Small`, `Medium`, `Large`. Creates/reuses options for the selected attribute. |
 | `variant_price[]` | decimal array | required with variants | Same length/order as `variant_labels[]`. |
 | `variant_stock[]` | integer array | required with variants | Same length/order as `variant_labels[]`. |
@@ -234,7 +292,7 @@ Validation error:
 }
 ```
 
-## 6. Edit Product
+## 7. Edit Product
 
 `POST /api/product-update`
 
@@ -264,7 +322,7 @@ service_zones[]=1
 
 Success response is the same shape as create, with an update message.
 
-## 7. Delete Product
+## 8. Delete Product
 
 `POST /api/product-delete`
 

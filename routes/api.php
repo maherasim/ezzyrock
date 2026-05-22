@@ -112,6 +112,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('booking-update', [API\BookingController::class, 'bookingUpdate']);
     Route::get('provider-dashboard', [API\DashboardController::class, 'providerDashboard']);
     Route::get('admin-dashboard', [API\DashboardController::class, 'adminDashboard']);
+    Route::get('product-form-config', [API\ProductController::class, 'getProductFormConfig']);
     Route::get('user-product-list', [API\ProductController::class, 'getUserProductList']);
     Route::post('product-save', [API\ProductController::class, 'saveProduct']);
     Route::post('product-update', [API\ProductController::class, 'saveProduct']);
