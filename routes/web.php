@@ -69,6 +69,7 @@ use App\Http\Controllers\Installer\PermissionsController;
 use App\Http\Controllers\NotificationTemplatesController;
 use App\Http\Controllers\Installer\RequirementsController;
 use App\Http\Controllers\ProviderAddressMappingController;
+use App\Http\Controllers\SiteVideoController;
 
 
 
@@ -134,6 +135,11 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     });
 
     Route::get('changeStatus', [HomeController::class, 'changeStatus'])->name('changeStatus');
+
+    Route::group(['middleware' => ['role:admin|demo_admin|demo_Admin']], function () {
+        Route::get('uploaded-video', [SiteVideoController::class, 'edit'])->name('uploaded-video.edit');
+        Route::post('uploaded-video', [SiteVideoController::class, 'update'])->name('uploaded-video.update');
+    });
 
     Route::group(['middleware' => ['permission:category list']], function () {
         Route::resource('category', CategoryController::class);

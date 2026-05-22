@@ -85,6 +85,7 @@ public function __construct()
         'loyalty-points' => __('messages.loyalty_points'),
         'product-attributes' => __('messages.attribute_list_page_title'),
         'product-units' => __('messages.product_unit_page_title'),
+        'uploaded-video' => __('messages.upload_video'),
     ];
 
     // Check if the current route exists in the mappings, then set the pageTitle

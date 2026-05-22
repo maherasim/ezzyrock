@@ -1,0 +1,74 @@
+<x-master-layout>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card card-block card-stretch">
+                    <div class="card-body p-0">
+                        <div class="d-flex justify-content-between align-items-center p-3 flex-wrap gap-3">
+                            <h5 class="fw-bold">{{ $pageTitle ?? __('messages.upload_video') }}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body">
+                        @if(session('success'))
+                            <div class="alert alert-success">{{ session('success') }}</div>
+                        @endif
+
+                        @if($errors->any())
+                            <div class="alert alert-danger">
+                                {{ $errors->first() }}
+                            </div>
+                        @endif
+
+                        {{ html()->form('POST', route('uploaded-video.update'))->attribute('enctype', 'multipart/form-data')->open() }}
+                            @csrf
+
+                            <div class="row">
+                                <div class="form-group col-md-6">
+                                    {{ html()->label(__('messages.title'), 'title')->class('form-control-label') }}
+                                    {{ html()->text('title', old('title', $video->title))->class('form-control')->placeholder(__('messages.title')) }}
+                                </div>
+
+                                <div class="form-group col-md-6">
+                                    {{ html()->label(__('messages.status') . ' <span class="text-danger">*</span>', 'status')->class('form-control-label') }}
+                                    {{ html()->select('status', ['1' => __('messages.active'), '0' => __('messages.inactive')], old('status', $video->status))->class('form-select select2js')->required() }}
+                                </div>
+
+                                <div class="form-group col-md-12">
+                                    <label class="form-control-label" for="video">
+                                        {{ __('messages.video') }} @if(!$video->getFirstMedia('site_video'))<span class="text-danger">*</span>@endif
+                                    </label>
+                                    <input type="file" name="video" id="video" class="form-control" accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska">
+                                    <small class="text-muted d-block mt-1">Allowed: mp4, mov, avi, webm, mkv. Max 100 MB. Uploading a new video replaces the old video.</small>
+                                </div>
+
+                                @php
+                                    $media = $video->getFirstMedia('site_video');
+                                @endphp
+                                @if($media)
+                                    <div class="form-group col-md-12">
+                                        <label class="form-control-label">{{ __('messages.current_video') }}</label>
+                                        <video controls class="w-100 rounded border" style="max-height: 420px;">
+                                            <source src="{{ $media->getFullUrl() }}" type="{{ $media->mime_type }}">
+                                        </video>
+                                        <div class="mt-2">
+                                            <a href="{{ $media->getFullUrl() }}" target="_blank">{{ $media->file_name }}</a>
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary">{{ __('messages.save') }}</button>
+                            </div>
+                        {{ html()->form()->close() }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</x-master-layout>

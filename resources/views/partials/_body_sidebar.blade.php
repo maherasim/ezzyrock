@@ -63,6 +63,26 @@
             ->data('permission', 'product list')
             ->link->attr(['class' => '']);
 
+        $menu
+            ->add(
+                '<span>' .
+                    __('messages.upload_video') .
+                    '</span><span class="custom-tooltip"><span class="tooltip-text">' .
+                    __('messages.upload_video') .
+                    '</span></span>',
+                ['route' => 'uploaded-video.edit'],
+            )
+            ->prepend(
+                '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3 8.5C3 6.01472 5.01472 4 7.5 4H13.5C15.9853 4 18 6.01472 18 8.5V15.5C18 17.9853 15.9853 20 13.5 20H7.5C5.01472 20 3 17.9853 3 15.5V8.5Z" stroke="currentColor" stroke-width="1.5"/>
+<path d="M18 10.5L21 8.5V15.5L18 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M9 9L13 12L9 15V9Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>',
+            )
+            ->nickname('uploaded_video')
+            ->data('role', ['admin', 'demo_admin'])
+            ->link->attr(['class' => '']);
+
         // if(auth()->user()->user_type == 'provider'){
         //      $menu
         //         ->add(__('messages.sidebar_form_title', ['form' => trans('messages.shop')]), [

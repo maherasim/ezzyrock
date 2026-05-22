@@ -551,13 +551,15 @@ class DashboardController extends Controller
             ->where('provider_id', $provider->id)
             ->where('service_type', 'ecommerce')
             ->count();
-        $total_product_order = Schema::hasTable('product_orders')
-            ? ProductOrder::query()
-                ->whereHas('items.product', function ($query) use ($provider) {
-                    $query->where('provider_id', $provider->id);
-                })
-                ->count()
-            : 0;
+        $totalProductOrderQuery = Schema::hasTable('product_orders') && Schema::hasColumn('product_orders', 'delivery_status')
+            ? ProductOrder::query()->whereHas('items.product', function ($query) use ($provider) {
+                $query->where('provider_id', $provider->id);
+            })
+            : null;
+        if ($totalProductOrderQuery) {
+            $totalProductOrderQuery->where('delivery_status', 'delivered');
+        }
+        $total_product_order = $totalProductOrderQuery ? $totalProductOrderQuery->count() : 0;
 
         if ($request->has('city_id') && !empty($request->city_id)) {
             $service = $service->whereHas('providers', function ($a) use ($request) {

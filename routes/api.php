@@ -39,6 +39,8 @@ Route::get('type-list', [API\CommanController::class, 'getTypeList']);
 Route::get('blog-list', [API\BlogController::class, 'getBlogList']);
 Route::post('blog-detail', [API\BlogController::class, 'getBlogDetail']);
 Route::get('landing-page-list', [API\FrontendSettingController::class, 'getLandingPageSetting']);
+Route::get('uploaded-video', [API\SiteVideoController::class, 'show']);
+Route::get('uploaded-video-list', [API\SiteVideoController::class, 'list']);
 
 Route::post('country-list', [API\CommanController::class, 'getCountryList']);
 Route::post('state-list', [API\CommanController::class, 'getStateList']);
