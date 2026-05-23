@@ -107,12 +107,16 @@
     overflow-wrap: anywhere;
 }
 /* Landing products & posts: 6 + 6 grid (12 items) */
+.landing-products-posts-grid {
+    align-items: start;
+}
 .landing-products-posts-grid .category-list-six-item .service-box-card {
     margin-bottom: 0;
-    height: 100%;
+    height: auto;
 }
 .landing-products-posts-grid .category-list-six-item {
     display: flex;
+    align-items: flex-start;
 }
 .landing-products-posts-grid .category-list-six-item > .w-100 {
     min-width: 0;
