@@ -558,7 +558,7 @@ class ProductOrderController extends Controller
     {
         $firstItem = $order->items->first();
         $productImage = $firstItem && $firstItem->product ? getSingleMedia($firstItem->product, 'product_attachment', null) : null;
-        $grandTotal = $this->productOrderGrandTotal($order);
+        $charges = $this->productOrderChargeSummary($order);
 
         return [
             'id' => $order->id,
@@ -570,14 +570,18 @@ class ProductOrderController extends Controller
             'payment_type' => $order->payment_type,
             'payment_status' => $order->payment_status,
             'items_count' => (int) ($order->items_count ?? 0),
-            'subtotal' => (float) $order->subtotal,
-            'subtotal_format' => getPriceFormat($order->subtotal),
-            'tax_total' => (float) ($order->tax_total ?? 0),
-            'tax_total_format' => getPriceFormat($order->tax_total ?? 0),
-            'grand_total' => $grandTotal,
-            'grand_total_format' => getPriceFormat($grandTotal),
-            'total' => $grandTotal,
-            'total_format' => getPriceFormat($grandTotal),
+            'subtotal' => $charges['subtotal'],
+            'subtotal_format' => getPriceFormat($charges['subtotal']),
+            'tax_total' => $charges['tax_total'],
+            'tax_total_format' => getPriceFormat($charges['tax_total']),
+            'shipping_charge' => $charges['shipping_charge'],
+            'shipping_charge_format' => getPriceFormat($charges['shipping_charge']),
+            'delivery_charge' => $charges['shipping_charge'],
+            'delivery_charge_format' => getPriceFormat($charges['shipping_charge']),
+            'grand_total' => $charges['grand_total'],
+            'grand_total_format' => getPriceFormat($charges['grand_total']),
+            'total' => $charges['grand_total'],
+            'total_format' => getPriceFormat($charges['grand_total']),
             'detail_url' => url('/api/my-product-orders/' . $order->id),
         ];
     }
@@ -590,7 +594,7 @@ class ProductOrderController extends Controller
             ->filter()
             ->first();
         $assignment = $order->assignments->first();
-        $grandTotal = $this->productOrderGrandTotal($order);
+        $charges = $this->productOrderChargeSummary($order);
 
         return [
             'id' => $order->id,
@@ -601,19 +605,24 @@ class ProductOrderController extends Controller
             'payment_type' => $order->payment_type,
             'payment_status' => $order->payment_status,
             'txn_id' => $order->txn_id,
-            'subtotal' => (float) $order->subtotal,
-            'subtotal_format' => getPriceFormat($order->subtotal),
-            'tax_total' => (float) ($order->tax_total ?? 0),
-            'tax_total_format' => getPriceFormat($order->tax_total ?? 0),
-            'tax' => (float) ($order->tax_total ?? 0),
-            'tax_format' => getPriceFormat($order->tax_total ?? 0),
-            'grand_total' => $grandTotal,
-            'grand_total_format' => getPriceFormat($grandTotal),
-            'total' => $grandTotal,
-            'total_format' => getPriceFormat($grandTotal),
-            'total_amount' => $grandTotal,
-            'total_amount_format' => getPriceFormat($grandTotal),
-            'tax_detail' => $order->tax_detail,
+            'subtotal' => $charges['subtotal'],
+            'subtotal_format' => getPriceFormat($charges['subtotal']),
+            'tax_total' => $charges['tax_total'],
+            'tax_total_format' => getPriceFormat($charges['tax_total']),
+            'tax' => $charges['tax_total'],
+            'tax_format' => getPriceFormat($charges['tax_total']),
+            'shipping_charge' => $charges['shipping_charge'],
+            'shipping_charge_format' => getPriceFormat($charges['shipping_charge']),
+            'delivery_charge' => $charges['shipping_charge'],
+            'delivery_charge_format' => getPriceFormat($charges['shipping_charge']),
+            'grand_total' => $charges['grand_total'],
+            'grand_total_format' => getPriceFormat($charges['grand_total']),
+            'total' => $charges['grand_total'],
+            'total_format' => getPriceFormat($charges['grand_total']),
+            'total_amount' => $charges['grand_total'],
+            'total_amount_format' => getPriceFormat($charges['grand_total']),
+            'tax_detail' => $charges['tax_detail'],
+            'shipping_charge_detail' => $charges['shipping_charge_detail'],
             'notes' => $notes,
             'shipping' => $notes['shipping'] ?? null,
             'provider' => $provider ? $this->serializeProductOrderProvider($provider) : null,
@@ -771,9 +780,7 @@ class ProductOrderController extends Controller
         $notes = $this->decodeJson($order->notes);
         $shipping = $this->shippingData($order);
         $location = $order->liveLocation;
-        $subtotal = (float) $order->subtotal;
-        $taxTotal = (float) ($order->tax_total ?? 0);
-        $grandTotal = $this->productOrderGrandTotal($order);
+        $charges = $this->productOrderChargeSummary($order);
         $providerAmount = $this->providerOrderAmount($order, $actor);
 
         return [
@@ -792,20 +799,25 @@ class ProductOrderController extends Controller
             'payment_method' => $order->payment_type,
             'payment_type' => $order->payment_type,
             'txn_id' => $order->txn_id,
-            'subtotal' => $subtotal,
-            'subtotal_format' => getPriceFormat($subtotal),
+            'subtotal' => $charges['subtotal'],
+            'subtotal_format' => getPriceFormat($charges['subtotal']),
             'discount' => 0,
-            'tax' => $taxTotal,
-            'tax_format' => getPriceFormat($taxTotal),
-            'tax_total' => $taxTotal,
-            'tax_total_format' => getPriceFormat($taxTotal),
-            'delivery_charge' => 0,
-            'grand_total' => $grandTotal,
-            'grand_total_format' => getPriceFormat($grandTotal),
-            'total' => $grandTotal,
-            'total_format' => getPriceFormat($grandTotal),
-            'total_amount' => $grandTotal,
-            'total_amount_format' => getPriceFormat($grandTotal),
+            'tax' => $charges['tax_total'],
+            'tax_format' => getPriceFormat($charges['tax_total']),
+            'tax_total' => $charges['tax_total'],
+            'tax_total_format' => getPriceFormat($charges['tax_total']),
+            'tax_detail' => $charges['tax_detail'],
+            'shipping_charge' => $charges['shipping_charge'],
+            'shipping_charge_format' => getPriceFormat($charges['shipping_charge']),
+            'shipping_charge_detail' => $charges['shipping_charge_detail'],
+            'delivery_charge' => $charges['shipping_charge'],
+            'delivery_charge_format' => getPriceFormat($charges['shipping_charge']),
+            'grand_total' => $charges['grand_total'],
+            'grand_total_format' => getPriceFormat($charges['grand_total']),
+            'total' => $charges['grand_total'],
+            'total_format' => getPriceFormat($charges['grand_total']),
+            'total_amount' => $charges['grand_total'],
+            'total_amount_format' => getPriceFormat($charges['grand_total']),
             'provider_amount' => $providerAmount,
             'provider_amount_format' => getPriceFormat($providerAmount),
             'provider' => $provider ? $this->serializeUserLite($provider) : null,
@@ -983,9 +995,65 @@ class ProductOrderController extends Controller
 
     private function productOrderGrandTotal(ProductOrder $order): float
     {
-        $calculatedTotal = round((float) $order->subtotal + (float) ($order->tax_total ?? 0), 2);
+        $charges = $this->productOrderChargeSummary($order);
 
-        return $calculatedTotal > 0 ? $calculatedTotal : (float) $order->total;
+        return $charges['grand_total'] > 0 ? $charges['grand_total'] : (float) $order->total;
+    }
+
+    private function productOrderChargeSummary(ProductOrder $order): array
+    {
+        $subtotal = round((float) $order->subtotal, 2);
+        $taxDetail = [];
+        $shippingDetail = [];
+        $taxTotal = 0.0;
+        $shippingCharge = 0.0;
+        $details = is_array($order->tax_detail) ? $order->tax_detail : [];
+
+        foreach ($details as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $amount = round((float) ($row['amount'] ?? 0), 2);
+            $row['amount'] = $amount;
+
+            if ($this->isShippingChargeTaxRow($row)) {
+                $shippingCharge = round($shippingCharge + $amount, 2);
+                $shippingDetail[] = $row;
+                continue;
+            }
+
+            $taxTotal = round($taxTotal + $amount, 2);
+            $taxDetail[] = $row;
+        }
+
+        if ($details === []) {
+            $taxTotal = round((float) ($order->tax_total ?? 0), 2);
+        }
+
+        $grandTotal = round($subtotal + $taxTotal + $shippingCharge, 2);
+        if ($grandTotal <= 0 && (float) $order->total > 0) {
+            $grandTotal = round((float) $order->total, 2);
+        }
+
+        return [
+            'subtotal' => $subtotal,
+            'tax_total' => $taxTotal,
+            'shipping_charge' => $shippingCharge,
+            'grand_total' => $grandTotal,
+            'tax_detail' => $taxDetail,
+            'shipping_charge_detail' => $shippingDetail,
+        ];
+    }
+
+    private function isShippingChargeTaxRow(array $row): bool
+    {
+        $title = strtolower((string) ($row['title'] ?? ''));
+
+        return str_contains($title, 'shipping')
+            || str_contains($title, 'shiping')
+            || str_contains($title, 'delivery charge')
+            || str_contains($title, 'delivery_charge');
     }
 
     private function productOrderItemReview($item, int $userId): ?ProductReview
