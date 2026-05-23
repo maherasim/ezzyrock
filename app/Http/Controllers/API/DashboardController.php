@@ -60,6 +60,7 @@ use App\Http\Resources\PromotionalBannerResource;
 use App\Traits\TranslationTrait;
 
 use App\Traits\ZoneTrait;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class DashboardController extends Controller
@@ -551,15 +552,28 @@ class DashboardController extends Controller
             ->where('provider_id', $provider->id)
             ->where('service_type', 'ecommerce')
             ->count();
-        $totalProductOrderQuery = Schema::hasTable('product_orders') && Schema::hasColumn('product_orders', 'delivery_status')
+        $totalProductOrderQuery = Schema::hasTable('product_orders')
             ? ProductOrder::query()->whereHas('items.product', function ($query) use ($provider) {
                 $query->where('provider_id', $provider->id);
             })
             : null;
-        if ($totalProductOrderQuery) {
-            $totalProductOrderQuery->where('delivery_status', 'delivered');
-        }
         $total_product_order = $totalProductOrderQuery ? $totalProductOrderQuery->count() : 0;
+        $total_cash_in_hand_products = 0;
+        if (
+            Schema::hasTable('product_orders') &&
+            Schema::hasTable('product_order_items') &&
+            Schema::hasTable('products') &&
+            Schema::hasColumn('product_orders', 'payment_type') &&
+            Schema::hasColumn('product_orders', 'payment_status')
+        ) {
+            $total_cash_in_hand_products = DB::table('product_order_items')
+                ->join('product_orders', 'product_orders.id', '=', 'product_order_items.product_order_id')
+                ->join('products', 'products.id', '=', 'product_order_items.product_id')
+                ->where('products.provider_id', $provider->id)
+                ->where('product_orders.payment_type', 'cash')
+                ->where('product_orders.payment_status', 'paid')
+                ->sum('product_order_items.line_total');
+        }
 
         if ($request->has('city_id') && !empty($request->city_id)) {
             $service = $service->whereHas('providers', function ($a) use ($request) {
@@ -653,6 +667,7 @@ class DashboardController extends Controller
             'total_service'  => $total_service,
             'total_product'  => $total_product,
             'total_product_order' => $total_product_order,
+            'total_cash_in_hand_products' => $total_cash_in_hand_products,
             'total_active_handyman' => $total_active_handyman->count(),
             'total_cash_in_hand'     => total_cash_in_hand(auth()->user()->id),
             'service'        => $service,
