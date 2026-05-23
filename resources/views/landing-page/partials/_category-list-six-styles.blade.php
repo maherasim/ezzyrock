@@ -112,7 +112,7 @@
 }
 .landing-products-posts-grid .category-list-six-item .service-box-card {
     margin-bottom: 0;
-    height: 88%;
+    height: 83%;
 }
 .landing-products-posts-grid .category-list-six-item {
     display: flex;
