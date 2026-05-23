@@ -13,9 +13,11 @@ use App\Models\User;
 use App\Notifications\CommonNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use PDF;
 
 class ProductOrderController extends Controller
 {
@@ -554,6 +556,88 @@ class ProductOrderController extends Controller
         ]);
     }
 
+    public function invoice(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id' => 'required_without:order_id|nullable|integer|exists:product_orders,id',
+            'order_id' => 'required_without:id|nullable|integer|exists:product_orders,id',
+            'email' => 'nullable|email',
+            'action' => 'nullable|in:email,download',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+
+        $orderId = (int) $request->get('id', $request->get('order_id'));
+        $order = ProductOrder::query()
+            ->with([
+                'user',
+                'items.product.providers',
+                'items.product.shops',
+                'items.variant.option.attribute',
+                'assignments.handyman',
+            ])
+            ->find($orderId);
+
+        if (!$order) {
+            return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
+        }
+
+        $user = auth()->user();
+        if (!$this->canAccessProductOrderInvoice($order, $user)) {
+            return response()->json(['status' => false, 'message' => __('messages.unauthorized')], 403);
+        }
+
+        $email = $request->filled('email') ? (string) $request->email : (string) optional($order->user)->email;
+        if ($request->get('action', 'email') === 'email' && empty($email)) {
+            return response()->json(['status' => false, 'message' => 'Customer email is required to send invoice.'], 422);
+        }
+
+        $charges = $this->productOrderChargeSummary($order);
+        $pdf = PDF::loadView('product-order.invoice_pdf', [
+            'order' => $order,
+            'charges' => $charges,
+            'shipping' => $this->shippingData($order),
+        ]);
+        $fileName = 'product_invoice_' . ($order->order_number ?: $order->id) . '.pdf';
+
+        if ($request->get('action') === 'download') {
+            return $pdf->download($fileName);
+        }
+
+        try {
+            Mail::send('booking.invoice_email', [
+                'email' => $email,
+                'title' => env('APP_NAME'),
+                'body' => __('messages.invoice_mail_body'),
+            ], function ($message) use ($email, $pdf, $fileName) {
+                $message->to($email)
+                    ->subject(env('APP_NAME') . ' Product Invoice')
+                    ->attachData($pdf->output(), $fileName);
+            });
+
+            return response()->json([
+                'status' => true,
+                'message' => __('messages.send_invoice'),
+                'data' => [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'email' => $email,
+                    'file_name' => $fileName,
+                ],
+            ]);
+        } catch (\Throwable $th) {
+            Log::error('Product order invoice email failed', [
+                'order_id' => $order->id,
+                'email' => $email,
+                'error' => $th->getMessage(),
+            ]);
+
+            return response()->json(['status' => false, 'message' => __('messages.something_wrong')], 500);
+        }
+    }
+
     private function serializeOrderListItem(ProductOrder $order): array
     {
         $firstItem = $order->items->first();
@@ -954,6 +1038,19 @@ class ProductOrderController extends Controller
         }
 
         return $user->hasAnyRole(['admin', 'demo_admin']);
+    }
+
+    private function canAccessProductOrderInvoice(ProductOrder $order, ?User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->user_type === 'user') {
+            return (int) $order->user_id === (int) $user->id;
+        }
+
+        return $this->canAccessProviderOrder($order, $user);
     }
 
     private function isAssignedActor(ProductOrder $order, int $userId): bool
