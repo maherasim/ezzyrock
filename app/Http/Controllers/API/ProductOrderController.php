@@ -142,6 +142,9 @@ class ProductOrderController extends Controller
         if ($request->filled('status')) {
             $orders->whereIn('status', $this->csv($request->status));
         }
+        if ($request->filled('delivery_status') && Schema::hasColumn('product_orders', 'delivery_status')) {
+            $orders->whereIn('delivery_status', $this->deliveryStatusFilterValues($request->delivery_status));
+        }
         if ($request->filled('payment_status')) {
             $orders->whereIn('payment_status', $this->csv($request->payment_status));
         }
@@ -487,6 +490,7 @@ class ProductOrderController extends Controller
     {
         $firstItem = $order->items->first();
         $productImage = $firstItem && $firstItem->product ? getSingleMedia($firstItem->product, 'product_attachment', null) : null;
+        $grandTotal = $this->productOrderGrandTotal($order);
 
         return [
             'id' => $order->id,
@@ -502,8 +506,10 @@ class ProductOrderController extends Controller
             'subtotal_format' => getPriceFormat($order->subtotal),
             'tax_total' => (float) ($order->tax_total ?? 0),
             'tax_total_format' => getPriceFormat($order->tax_total ?? 0),
-            'total' => (float) $order->total,
-            'total_format' => getPriceFormat($order->total),
+            'grand_total' => $grandTotal,
+            'grand_total_format' => getPriceFormat($grandTotal),
+            'total' => $grandTotal,
+            'total_format' => getPriceFormat($grandTotal),
             'detail_url' => url('/api/my-product-orders/' . $order->id),
         ];
     }
@@ -516,6 +522,7 @@ class ProductOrderController extends Controller
             ->filter()
             ->first();
         $assignment = $order->assignments->first();
+        $grandTotal = $this->productOrderGrandTotal($order);
 
         return [
             'id' => $order->id,
@@ -530,8 +537,14 @@ class ProductOrderController extends Controller
             'subtotal_format' => getPriceFormat($order->subtotal),
             'tax_total' => (float) ($order->tax_total ?? 0),
             'tax_total_format' => getPriceFormat($order->tax_total ?? 0),
-            'total' => (float) $order->total,
-            'total_format' => getPriceFormat($order->total),
+            'tax' => (float) ($order->tax_total ?? 0),
+            'tax_format' => getPriceFormat($order->tax_total ?? 0),
+            'grand_total' => $grandTotal,
+            'grand_total_format' => getPriceFormat($grandTotal),
+            'total' => $grandTotal,
+            'total_format' => getPriceFormat($grandTotal),
+            'total_amount' => $grandTotal,
+            'total_amount_format' => getPriceFormat($grandTotal),
             'tax_detail' => $order->tax_detail,
             'notes' => $notes,
             'shipping' => $notes['shipping'] ?? null,
@@ -688,6 +701,10 @@ class ProductOrderController extends Controller
         $notes = $this->decodeJson($order->notes);
         $shipping = $this->shippingData($order);
         $location = $order->liveLocation;
+        $subtotal = (float) $order->subtotal;
+        $taxTotal = (float) ($order->tax_total ?? 0);
+        $grandTotal = $this->productOrderGrandTotal($order);
+        $providerAmount = $this->providerOrderAmount($order, $actor);
 
         return [
             'id' => $order->id,
@@ -705,12 +722,22 @@ class ProductOrderController extends Controller
             'payment_method' => $order->payment_type,
             'payment_type' => $order->payment_type,
             'txn_id' => $order->txn_id,
-            'subtotal' => (float) $order->subtotal,
+            'subtotal' => $subtotal,
+            'subtotal_format' => getPriceFormat($subtotal),
             'discount' => 0,
-            'tax' => (float) ($order->tax_total ?? 0),
+            'tax' => $taxTotal,
+            'tax_format' => getPriceFormat($taxTotal),
+            'tax_total' => $taxTotal,
+            'tax_total_format' => getPriceFormat($taxTotal),
             'delivery_charge' => 0,
-            'total_amount' => $this->providerOrderAmount($order, $actor),
-            'total_amount_format' => getPriceFormat($this->providerOrderAmount($order, $actor)),
+            'grand_total' => $grandTotal,
+            'grand_total_format' => getPriceFormat($grandTotal),
+            'total' => $grandTotal,
+            'total_format' => getPriceFormat($grandTotal),
+            'total_amount' => $grandTotal,
+            'total_amount_format' => getPriceFormat($grandTotal),
+            'provider_amount' => $providerAmount,
+            'provider_amount_format' => getPriceFormat($providerAmount),
             'provider' => $provider ? $this->serializeUserLite($provider) : null,
             'customer' => $order->user ? $this->serializeUserLite($order->user, true) : null,
             'delivery_address' => [
@@ -884,6 +911,13 @@ class ProductOrderController extends Controller
         return round((float) $items->sum(fn ($item) => (float) $item->line_total), 2);
     }
 
+    private function productOrderGrandTotal(ProductOrder $order): float
+    {
+        $calculatedTotal = round((float) $order->subtotal + (float) ($order->tax_total ?? 0), 2);
+
+        return $calculatedTotal > 0 ? $calculatedTotal : (float) $order->total;
+    }
+
     private function shippingData(ProductOrder $order): array
     {
         return $this->decodeJson($order->notes)['shipping'] ?? [];
@@ -1047,6 +1081,21 @@ class ProductOrderController extends Controller
     private function csv($value): array
     {
         return is_array($value) ? $value : array_filter(explode(',', (string) $value), fn ($item) => $item !== '');
+    }
+
+    private function deliveryStatusFilterValues($value): array
+    {
+        $statuses = $this->csv($value);
+
+        foreach ($statuses as $status) {
+            if ($status === 'accepted') {
+                $statuses[] = 'accept';
+            } elseif ($status === 'accept') {
+                $statuses[] = 'accepted';
+            }
+        }
+
+        return array_values(array_unique($statuses));
     }
 
     private function perPage(Request $request, $query): int
