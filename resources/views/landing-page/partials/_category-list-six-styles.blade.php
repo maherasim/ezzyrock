@@ -106,7 +106,7 @@
     word-break: break-word;
     overflow-wrap: anywhere;
 }
-/* Landing products & posts: 6 + 6 grid (12 items) */
+/* Landing services, products & posts: compact square cards */
 .landing-products-posts-grid {
     align-items: start;
 }
