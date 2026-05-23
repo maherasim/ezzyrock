@@ -629,6 +629,8 @@ class ProductOrderController extends Controller
 
         return [
             'id' => $item->id,
+            'product_order_id' => $item->product_order_id,
+            'product_order_item_id' => $item->id,
             'product_id' => $item->product_id,
             'product_variant_id' => $item->product_variant_id,
             'product_name' => $item->product_name,
@@ -932,10 +934,33 @@ class ProductOrderController extends Controller
     private function productOrderItemReview($item, int $userId): ?ProductReview
     {
         if (Schema::hasColumn('product_reviews', 'product_order_item_id')) {
-            return ProductReview::query()
+            $review = ProductReview::query()
                 ->where('product_order_item_id', $item->id)
                 ->where('user_id', $userId)
                 ->first();
+
+            if ($review) {
+                return $review;
+            }
+        }
+
+        if (Schema::hasColumn('product_reviews', 'product_order_id')) {
+            $review = ProductReview::query()
+                ->where('product_order_id', $item->product_order_id)
+                ->where('product_id', $item->product_id)
+                ->where('user_id', $userId)
+                ->first();
+
+            if ($review) {
+                return $review;
+            }
+        }
+
+        if (
+            Schema::hasColumn('product_reviews', 'product_order_item_id')
+            || Schema::hasColumn('product_reviews', 'product_order_id')
+        ) {
+            return null;
         }
 
         return ProductReview::query()
