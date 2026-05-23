@@ -270,6 +270,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('product-order-proof-list', [API\ProductOrderController::class, 'productOrderProofList']);
     Route::post('product-order-proof-list', [API\ProductOrderController::class, 'productOrderProofList']);
     Route::post('product-order-payment-confirm', [API\ProductOrderController::class, 'confirmProviderOrderPayment']);
+    Route::post('product-order-cash-payment-paid', [API\ProductOrderController::class, 'markCashPaymentPaid']);
 
     Route::post('update-location', [API\BookingController::class, 'updateLocation']);
     Route::get('get-location', [API\BookingController::class, 'getLocation']);

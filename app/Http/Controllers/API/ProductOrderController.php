@@ -497,6 +497,63 @@ class ProductOrderController extends Controller
         ]);
     }
 
+    public function markCashPaymentPaid(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id' => 'required_without:order_id|nullable|integer|exists:product_orders,id',
+            'order_id' => 'required_without:id|nullable|integer|exists:product_orders,id',
+            'remarks' => 'nullable|string|max:1000',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+
+        if (! Schema::hasColumn('product_orders', 'payment_status')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Payment status column is not available for product orders.',
+            ], 422);
+        }
+
+        $orderId = (int) $request->get('id', $request->get('order_id'));
+        $order = $this->findAccessibleProviderOrder($orderId, true);
+        if (!$order) {
+            return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
+        }
+
+        if ((string) ($order->payment_type ?? '') !== 'cash') {
+            return response()->json([
+                'status' => false,
+                'message' => 'Only cash product orders can be marked as paid from this API.',
+            ], 422);
+        }
+
+        $order->payment_status = 'paid';
+        $this->mergeOrderNote($order, ['payment_remarks' => $request->remarks]);
+        $order->save();
+
+        $this->recordActivity($order, 'payment_confirmed', 'Cash payment has been marked as paid successfully', [
+            'payment_status' => 'paid',
+            'remarks' => $request->remarks,
+        ]);
+        $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'payment_message_status', 'Cash payment has been marked as paid successfully', [
+            'payment_status' => 'paid',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Cash payment has been marked as paid successfully',
+            'data' => [
+                'id' => $order->id,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'payment_type' => $order->payment_type,
+                'payment_status' => $order->payment_status,
+            ],
+        ]);
+    }
+
     private function serializeOrderListItem(ProductOrder $order): array
     {
         $firstItem = $order->items->first();
