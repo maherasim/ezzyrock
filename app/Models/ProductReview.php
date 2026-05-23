@@ -14,6 +14,8 @@ class ProductReview extends Model
 
     protected $fillable = [
         'product_id',
+        'product_order_id',
+        'product_order_item_id',
         'user_id',
         'rating',
         'comment',
@@ -22,6 +24,8 @@ class ProductReview extends Model
 
     protected $casts = [
         'product_id' => 'integer',
+        'product_order_id' => 'integer',
+        'product_order_item_id' => 'integer',
         'user_id' => 'integer',
         'rating' => 'double',
         'status' => 'integer',
@@ -30,6 +34,16 @@ class ProductReview extends Model
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');
+    }
+
+    public function productOrder()
+    {
+        return $this->belongsTo(ProductOrder::class, 'product_order_id', 'id');
+    }
+
+    public function productOrderItem()
+    {
+        return $this->belongsTo(ProductOrderItem::class, 'product_order_item_id', 'id');
     }
 
     public function user()

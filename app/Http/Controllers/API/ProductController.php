@@ -8,6 +8,7 @@ use App\Models\ProductAttribute;
 use App\Models\ProductAttributeOption;
 use App\Models\ProductUnit;
 use App\Models\ProductVariant;
+use App\Models\ProductOrderItem;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\API\ProductResource;
@@ -19,6 +20,7 @@ use App\Models\SubCategory;
 use App\Traits\ZoneTrait;
 use App\Models\ServiceZone;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
@@ -333,20 +335,64 @@ class ProductController extends Controller
                     ->where('status', 1)
                     ->where('service_request_status', 'approve')),
             ],
+            'product_order_item_id' => 'nullable|integer|exists:product_order_items,id',
+            'order_item_id' => 'nullable|integer|exists:product_order_items,id',
+            'product_order_id' => 'nullable|integer|exists:product_orders,id',
+            'order_id' => 'nullable|integer|exists:product_orders,id',
             'rating' => 'required|numeric|min:1|max:5',
             'comment' => 'nullable|string|max:1000',
         ]);
 
-        $review = ProductReview::query()->updateOrCreate(
-            [
-                'product_id' => (int) $validated['product_id'],
+        $orderItemId = $request->get('product_order_item_id', $request->get('order_item_id'));
+        $orderId = $request->get('product_order_id', $request->get('order_id'));
+        $orderItem = null;
+
+        if ($orderItemId || $orderId) {
+            $orderItem = ProductOrderItem::query()
+                ->with('order')
+                ->where('product_id', (int) $validated['product_id'])
+                ->when($orderItemId, fn ($query) => $query->where('id', (int) $orderItemId))
+                ->when($orderId, fn ($query) => $query->where('product_order_id', (int) $orderId))
+                ->whereHas('order', fn ($query) => $query->where('user_id', $user->id))
+                ->first();
+
+            if (! $orderItem) {
+                return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
+            }
+
+            $orderStatus = Schema::hasColumn('product_orders', 'delivery_status')
+                ? (string) ($orderItem->order->delivery_status ?? '')
+                : '';
+            $orderStatus = $orderStatus ?: (string) $orderItem->order->status;
+            if (! in_array($orderStatus, ['delivered', 'completed'], true)) {
+                return response()->json(['status' => false, 'message' => 'Product order can be rated after delivery.'], 422);
+            }
+        }
+
+        $reviewKey = [
+            'product_id' => (int) $validated['product_id'],
+            'user_id' => $user->id,
+        ];
+        $reviewData = [
+            'rating' => round((float) $validated['rating'], 1),
+            'comment' => $validated['comment'] ?? null,
+            'status' => 1,
+        ];
+
+        if ($orderItem && Schema::hasColumn('product_reviews', 'product_order_item_id')) {
+            $reviewKey = [
+                'product_order_item_id' => $orderItem->id,
                 'user_id' => $user->id,
-            ],
-            [
-                'rating' => round((float) $validated['rating'], 1),
-                'comment' => $validated['comment'] ?? null,
-                'status' => 1,
-            ]
+            ];
+            $reviewData['product_id'] = (int) $validated['product_id'];
+            if (Schema::hasColumn('product_reviews', 'product_order_id')) {
+                $reviewData['product_order_id'] = $orderItem->product_order_id;
+            }
+        }
+
+        $review = ProductReview::query()->updateOrCreate(
+            $reviewKey,
+            $reviewData
         );
 
         $review->load('user');

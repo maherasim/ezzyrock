@@ -344,7 +344,8 @@ class ProductOrderController extends Controller
     public function updateProviderOrderLocation(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'id' => 'required|integer|exists:product_orders,id',
+            'id' => 'required_without:order_id|nullable|integer|exists:product_orders,id',
+            'order_id' => 'required_without:id|nullable|integer|exists:product_orders,id',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
         ]);
@@ -353,7 +354,8 @@ class ProductOrderController extends Controller
             return $this->validationError($validator);
         }
 
-        $order = $this->findAccessibleProviderOrder((int) $request->id);
+        $orderId = (int) $request->get('id', $request->get('order_id'));
+        $order = $this->findAccessibleProviderOrder($orderId);
         if (!$order || !$this->isAssignedActor($order, auth()->id())) {
             return response()->json(['status' => false, 'message' => __('messages.unauthorized')], 403);
         }
@@ -561,7 +563,7 @@ class ProductOrderController extends Controller
             'delivery_boy' => $assignment?->handyman ? $this->serializeProductOrderDeliveryBoy($assignment->handyman) : null,
             'items_count' => $order->items->count(),
             'items' => $order->items
-                ->map(fn ($item) => $this->serializeOrderItem($item))
+                ->map(fn ($item) => $this->serializeOrderItem($item, $order))
                 ->values(),
             'activity' => $this->serializeOrderActivities($order),
             'proof' => $this->serializeOrderProofs($order),
@@ -614,18 +616,16 @@ class ProductOrderController extends Controller
         ];
     }
 
-    private function serializeOrderItem($item): array
+    private function serializeOrderItem($item, ?ProductOrder $order = null): array
     {
         $product = $item->product;
         $userId = auth()->id();
         $review = null;
 
         if ($userId && $item->product_id) {
-            $review = ProductReview::query()
-                ->where('product_id', $item->product_id)
-                ->where('user_id', $userId)
-                ->first();
+            $review = $this->productOrderItemReview($item, $userId);
         }
+        $canRate = $userId && $this->canRateProductOrderItem($order) && $review === null;
 
         return [
             'id' => $item->id,
@@ -638,11 +638,13 @@ class ProductOrderController extends Controller
             'quantity' => (int) $item->quantity,
             'line_total' => (float) $item->line_total,
             'line_total_format' => getPriceFormat($item->line_total),
-            'can_rate' => $review === null,
-            'show_rating_button' => $review === null,
+            'can_rate' => $canRate,
+            'show_rating_button' => $canRate,
             'is_rated' => $review !== null,
             'rating' => $review ? [
                 'id' => $review->id,
+                'product_order_id' => $review->product_order_id,
+                'product_order_item_id' => $review->product_order_item_id,
                 'rating' => (float) $review->rating,
                 'comment' => $review->comment,
                 'status' => (int) $review->status,
@@ -925,6 +927,35 @@ class ProductOrderController extends Controller
         $calculatedTotal = round((float) $order->subtotal + (float) ($order->tax_total ?? 0), 2);
 
         return $calculatedTotal > 0 ? $calculatedTotal : (float) $order->total;
+    }
+
+    private function productOrderItemReview($item, int $userId): ?ProductReview
+    {
+        if (Schema::hasColumn('product_reviews', 'product_order_item_id')) {
+            return ProductReview::query()
+                ->where('product_order_item_id', $item->id)
+                ->where('user_id', $userId)
+                ->first();
+        }
+
+        return ProductReview::query()
+            ->where('product_id', $item->product_id)
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    private function canRateProductOrderItem(?ProductOrder $order): bool
+    {
+        if (! $order) {
+            return true;
+        }
+
+        $deliveryStatus = Schema::hasColumn('product_orders', 'delivery_status')
+            ? (string) ($order->delivery_status ?? '')
+            : '';
+        $status = (string) ($deliveryStatus ?: $order->status);
+
+        return in_array($status, ['delivered', 'completed'], true);
     }
 
     private function shippingData(ProductOrder $order): array
