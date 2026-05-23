@@ -118,6 +118,19 @@
     min-width: 0;
     flex: 1;
 }
+.landing-products-posts-grid .service-box-card .iq-image {
+    width: 100%;
+}
+.landing-products-posts-grid .service-box-card .service-img {
+    aspect-ratio: 1 / 1;
+    display: block;
+    height: auto !important;
+    min-height: 0 !important;
+    width: 100%;
+}
+.landing-products-posts-grid .service-box-card img.service-img {
+    object-fit: cover;
+}
 /* Tighter gap between product categories and classified categories on landing */
 .landing-category-modules-gap {
     margin-top: 1.25rem;
