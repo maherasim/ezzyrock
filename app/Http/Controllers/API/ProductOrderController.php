@@ -260,17 +260,26 @@ class ProductOrderController extends Controller
             return response()->json(['status' => false, 'message' => __('messages.record_not_found')], 404);
         }
 
-        $order->status = $request->delivery_status;
-        if (Schema::hasColumn('product_orders', 'delivery_status')) {
-            $order->delivery_status = $request->delivery_status;
+        $oldStatus = (string) $order->status;
+        $newStatus = $request->filled('delivery_status') ? (string) $request->delivery_status : $oldStatus;
+
+        if ($request->filled('delivery_status')) {
+            $order->status = $newStatus;
+            if (Schema::hasColumn('product_orders', 'delivery_status')) {
+                $order->delivery_status = $newStatus;
+            }
         }
         if ($request->filled('payment_status') && Schema::hasColumn('product_orders', 'payment_status')) {
             $order->payment_status = $request->payment_status;
         }
         $this->mergeOrderNote($order, ['last_reason' => $request->reason]);
         $order->save();
-        $this->recordActivity($order, $request->delivery_status, $this->statusLabel($request->delivery_status), ['reason' => $request->reason]);
-        $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'update_booking_status', 'Product order status has been updated successfully');
+        $this->recordActivity($order, $newStatus, $this->statusLabel($newStatus), ['reason' => $request->reason]);
+        $this->sendProductOrderNotification($order->fresh(['items.product.providers', 'assignments.handyman', 'user']), 'update_booking_status', 'Product order status has been updated successfully', [
+            'old_status' => $this->statusLabel($oldStatus),
+            'booking_status' => $this->statusLabel($newStatus),
+            'payment_status' => $order->payment_status ?? '',
+        ]);
 
         return response()->json([
             'status' => true,
@@ -952,6 +961,11 @@ class ProductOrderController extends Controller
         $actor = auth()->user();
         $providerName = optional($providers->first())->display_name;
         $handymanName = $handymen->pluck('display_name')->filter()->join(', ');
+        $productNames = $order->items
+            ->pluck('product_name')
+            ->filter()
+            ->unique()
+            ->join(', ');
 
         $recipients = collect();
         if ($customer) {
@@ -963,13 +977,17 @@ class ProductOrderController extends Controller
         $recipients
             ->filter()
             ->unique('id')
-            ->each(function (User $recipient) use ($order, $templateType, $message, $extra, $customer, $providerName, $handymanName, $actor) {
+            ->each(function (User $recipient) use ($order, $templateType, $message, $extra, $customer, $providerName, $handymanName, $actor, $productNames) {
                 try {
-                    $recipient->notify(new CommonNotification($templateType, array_merge([
+                    $recipient->notifyNow(new CommonNotification($templateType, array_merge([
                         'person_id' => $recipient->id,
                         'user_type' => $recipient->user_type,
                         'type' => 'product_order',
+                        'notification-type' => $templateType,
+                        'activity_type' => __('messages.update_booking_status'),
+                        'activity_slug' => 'update_booking_status',
                         'message' => $message,
+                        'id' => $order->id,
                         'booking_id' => $order->id,
                         'order_id' => $order->id,
                         'order_number' => $order->order_number,
@@ -986,8 +1004,8 @@ class ProductOrderController extends Controller
                         'provider_name' => $providerName ?? '',
                         'handyman_name' => $handymanName,
                         'assignee_name' => $handymanName,
-                        'booking_services_name' => 'Product Order',
-                        'service_name' => 'Product Order',
+                        'booking_services_name' => $productNames ?: 'Product Order',
+                        'service_name' => $productNames ?: 'Product Order',
                         'booking_date' => optional($order->created_at)->format('Y-m-d') ?? '',
                         'booking_time' => optional($order->created_at)->format('H:i:s') ?? '',
                         'venue_address' => $this->shippingData($order)['address'] ?? '',
