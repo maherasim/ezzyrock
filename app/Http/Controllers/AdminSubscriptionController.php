@@ -7,6 +7,7 @@ use App\Models\ProviderSubscription;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AdminSubscriptionController extends Controller
@@ -26,15 +27,10 @@ class AdminSubscriptionController extends Controller
             ->whereIn('user_type', ['user', 'provider'])
             ->firstOrFail();
 
-        $allowedModules = $targetUser->user_type === 'provider'
+        $subscriptionModules = $targetUser->user_type === 'provider'
             ? ['service', 'ecommerce']
             : ['classified'];
-        $defaultModule = $targetUser->user_type === 'provider' ? 'service' : 'classified';
-
-        $module = $request->get('module', $defaultModule);
-        if (! in_array($module, $allowedModules, true)) {
-            $module = $defaultModule;
-        }
+        $module = $subscriptionModules[0];
 
         // One billing catalog (admin service plans); category only scopes the subscription record, not which plan rows load.
         $plans = Plans::query()
@@ -44,17 +40,17 @@ class AdminSubscriptionController extends Controller
             ->orderBy('amount')
             ->get();
 
-        $activeForModule = provider_subscriptions_valid_query($targetUser->id, $module)
-            ->orderByDesc('id')
-            ->first();
-
-        $activePlanId = $activeForModule?->plan_id;
-
-        $activeSubscriptions = provider_subscriptions_valid_query($targetUser->id, $module)
+        $activeSubscriptions = provider_subscriptions_valid_query($targetUser->id)
+            ->whereIn('module', $subscriptionModules)
             ->orderByDesc('id')
             ->get();
 
-        return view('subscription.extend', compact('targetUser', 'module', 'plans', 'activeSubscriptions', 'activeForModule', 'activePlanId'));
+        $activePlanIds = $activeSubscriptions->pluck('plan_id')->filter()->unique();
+        $activePlanId = $activeSubscriptions->count() === count($subscriptionModules) && $activePlanIds->count() === 1
+            ? $activePlanIds->first()
+            : null;
+
+        return view('subscription.extend', compact('targetUser', 'module', 'plans', 'activeSubscriptions', 'activePlanId'));
     }
 
     public function store(Request $request)
@@ -98,57 +94,65 @@ class AdminSubscriptionController extends Controller
             ->where('module', subscription_billing_plan_module())
             ->firstOrFail();
 
-        $existing = get_user_active_plan($user->id, $validated['module']);
+        $subscriptionModules = $user->user_type === 'provider'
+            ? ['service', 'ecommerce']
+            : ['classified'];
 
-        // Period base for end_at:
-        // - Fresh or lapsed (no valid row): from today.
-        // - Active plan with end_at strictly in the future: from that expiry (extend after current period).
-        $periodBaseForEnd = null;
-        if ($existing) {
-            $rawEnd = $existing->end_at ?? null;
-            if ($rawEnd) {
-                $oldEnd = Carbon::parse($rawEnd);
-                if ($oldEnd->greaterThan(Carbon::now())) {
-                    $periodBaseForEnd = $oldEnd->format('Y-m-d H:i:s');
+        DB::transaction(function () use ($subscriptionModules, $user, $plan, $validated) {
+            foreach ($subscriptionModules as $subscriptionModule) {
+                $existing = get_user_active_plan($user->id, $subscriptionModule);
+
+                // Extend each stored module from its own current expiry when it is still active.
+                $periodBaseForEnd = null;
+                if ($existing) {
+                    $rawEnd = $existing->end_at ?? null;
+                    if ($rawEnd) {
+                        $oldEnd = Carbon::parse($rawEnd);
+                        if ($oldEnd->greaterThan(Carbon::now())) {
+                            $periodBaseForEnd = $oldEnd->format('Y-m-d H:i:s');
+                        }
+                    }
                 }
+
+                ProviderSubscription::query()
+                    ->where('user_id', $user->id)
+                    ->where('module', $subscriptionModule)
+                    ->where('status', config('constant.SUBSCRIPTION_STATUS.ACTIVE'))
+                    ->update(['status' => config('constant.SUBSCRIPTION_STATUS.INACTIVE')]);
+
+                $startAt = now()->format('Y-m-d H:i:s');
+                if ($periodBaseForEnd === null) {
+                    $periodBaseForEnd = $startAt;
+                }
+
+                $endAt = $this->computeAdminExtendEndAt($periodBaseForEnd, $plan, 0);
+                $endAt = subscription_end_at_or_fix($startAt, $endAt);
+
+                ProviderSubscription::query()->create([
+                    'plan_id' => $plan->id,
+                    'user_id' => $user->id,
+                    'title' => $plan->title,
+                    'identifier' => $plan->identifier,
+                    'type' => $plan->type,
+                    'start_at' => $startAt,
+                    'end_at' => $endAt,
+                    'amount' => $plan->amount,
+                    'status' => config('constant.SUBSCRIPTION_STATUS.ACTIVE'),
+                    'payment_id' => null,
+                    'plan_limitation' => optional($plan->planlimit)->plan_limitation ? json_encode($plan->planlimit->plan_limitation) : null,
+                    'duration' => $plan->duration,
+                    'description' => trim(($plan->description ?? '').(!empty($validated['notes']) ? "\n\nAdmin note: ".$validated['notes'] : '')),
+                    'plan_type' => $plan->plan_type,
+                    'module' => $subscriptionModule,
+                ]);
             }
 
-            ProviderSubscription::query()
-                ->where('id', (int) $existing->id)
-                ->update(['status' => config('constant.SUBSCRIPTION_STATUS.INACTIVE')]);
-        }
-
-        $startAt = now()->format('Y-m-d H:i:s');
-        if ($periodBaseForEnd === null) {
-            $periodBaseForEnd = $startAt;
-        }
-
-        $endAt = $this->computeAdminExtendEndAt($periodBaseForEnd, $plan, 0);
-        $endAt = subscription_end_at_or_fix($startAt, $endAt);
-
-        ProviderSubscription::query()->create([
-            'plan_id' => $plan->id,
-            'user_id' => $user->id,
-            'title' => $plan->title,
-            'identifier' => $plan->identifier,
-            'type' => $plan->type,
-            'start_at' => $startAt,
-            'end_at' => $endAt,
-            'amount' => $plan->amount,
-            'status' => config('constant.SUBSCRIPTION_STATUS.ACTIVE'),
-            'payment_id' => null,
-            'plan_limitation' => optional($plan->planlimit)->plan_limitation ? json_encode($plan->planlimit->plan_limitation) : null,
-            'duration' => $plan->duration,
-            'description' => trim(($plan->description ?? '').(!empty($validated['notes']) ? "\n\nAdmin note: ".$validated['notes'] : '')),
-            'plan_type' => $plan->plan_type,
-            'module' => $validated['module'],
-        ]);
-
-        $user->is_subscribe = provider_subscriptions_valid_query($user->id)->exists() ? 1 : 0;
-        $user->save();
+            $user->is_subscribe = provider_subscriptions_valid_query($user->id)->exists() ? 1 : 0;
+            $user->save();
+        });
 
         return redirect()
-            ->route('admin.subscription.extend', ['user_id' => $user->id, 'module' => $validated['module']])
+            ->route('admin.subscription.extend', ['user_id' => $user->id])
             ->withSuccess(__('messages.update_form', ['form' => __('messages.plan')]));
     }
 

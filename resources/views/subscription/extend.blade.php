@@ -30,14 +30,8 @@
                                 </div>
                                 <div class="form-group col-md-3">
                                     <label class="form-control-label">{{ __('messages.category') }}</label>
-                                    <select id="module-select" name="module" class="form-select" required>
-                                        @if($targetUser->user_type === 'provider')
-                                            <option value="service" {{ $module === 'service' ? 'selected' : '' }}>Service</option>
-                                            <option value="ecommerce" {{ $module === 'ecommerce' ? 'selected' : '' }}>Ecommerce</option>
-                                        @else
-                                            <option value="classified" {{ $module === 'classified' ? 'selected' : '' }}>Classified</option>
-                                        @endif
-                                    </select>
+                                    <input type="hidden" name="module" value="{{ $module }}">
+                                    <input class="form-control" value="{{ $targetUser->user_type === 'provider' ? 'Services + Ecommerce' : 'Classified' }}" disabled>
                                 </div>
                             </div>
 
@@ -56,8 +50,8 @@
                                             </option>
                                         @endforeach
                                     </select>
-                                    @if (!empty($activeForModule))
-                                        <p class="small text-muted mt-2 mb-0">Active for this module: <strong>{{ $activeForModule->title }}</strong> until {{ $activeForModule->end_at }}. Choose a plan above to replace or extend.</p>
+                                    @if ($activeSubscriptions->isNotEmpty())
+                                        <p class="small text-muted mt-2 mb-0">Choose a plan above to replace or extend the active subscription.</p>
                                     @endif
                                 </div>
                                 <div class="form-group col-md-4">
@@ -85,32 +79,21 @@
             <div class="col-lg-4">
                 <div class="card">
                     <div class="card-header">
-                        <h6 class="mb-0">Active — {{ ucfirst($module) }}</h6>
+                        <h6 class="mb-0">Active subscriptions</h6>
                     </div>
                     <div class="card-body">
                         @forelse($activeSubscriptions as $sub)
                             <div class="border rounded p-2 mb-2">
                                 <div><strong>{{ $sub->title }}</strong></div>
-                                <div class="small text-muted">{{ ucfirst($sub->type) }}</div>
+                                <div class="small text-muted">{{ ucfirst($sub->module ?? $module) }} - {{ ucfirst($sub->type) }}</div>
                                 <div class="small">{{ $sub->start_at }} to {{ $sub->end_at }}</div>
                             </div>
                         @empty
-                            <p class="mb-0 text-muted">No active subscription for this module.</p>
+                            <p class="mb-0 text-muted">No active subscription.</p>
                         @endforelse
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <script>
-        (function () {
-            var sel = document.getElementById('module-select');
-            if (!sel) return;
-            sel.addEventListener('change', function () {
-                var base = @json(route('admin.subscription.extend', ['user_id' => $targetUser->id]));
-                var sep = base.indexOf('?') === -1 ? '?' : '&';
-                window.location.href = base + sep + 'module=' + encodeURIComponent(sel.value);
-            });
-        })();
-    </script>
 </x-master-layout>
