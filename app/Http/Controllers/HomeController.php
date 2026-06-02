@@ -97,7 +97,15 @@ class HomeController extends Controller
         $data['cancellationcharge'] = Booking::where('status', 'cancelled')->sum('cancellation_charge_amount');
         $data['total_subscription_amout'] = SubscriptionTransaction::where('payment_status', 'paid')->sum('amount');
         $promotionalBannerAmount = PromotionalBanner::where('payment_status', 'paid')->sum('total_amount');
-        $data['total_revenue'] = $data['CommissionEarning'] + $data['cancellationcharge'] + $data['total_subscription_amout'] + $promotionalBannerAmount;
+        $paidProductOrderSubtotal = Schema::hasTable('product_orders') && Schema::hasColumn('product_orders', 'payment_status')
+            ? ProductOrder::where('payment_status', 'paid')->sum('subtotal')
+            : 0;
+        $paidProductOrderTax = Schema::hasTable('product_orders')
+            && Schema::hasColumn('product_orders', 'payment_status')
+            && Schema::hasColumn('product_orders', 'tax_total')
+            ? ProductOrder::where('payment_status', 'paid')->sum('tax_total')
+            : 0;
+        $data['total_revenue'] = $data['CommissionEarning'] + $data['cancellationcharge'] + $data['total_subscription_amout'] + $promotionalBannerAmount + $paidProductOrderSubtotal;
         if ($user->hasAnyRole(['admin', 'demo_admin'])) {
             $data['revenueData']    =  adminEarning();
         }
@@ -132,15 +140,13 @@ class HomeController extends Controller
         $data['total_tax']  =    Booking::with('commissionsdata')->whereHas('commissionsdata', function ($query) {
             $query->whereIn('commission_status', ['unpaid', 'paid'])->groupBy('booking_id');
         })->sum('final_total_tax') ?? 0;
+        $data['total_tax'] += $paidProductOrderTax;
         // $data['total_earning']  = CommissionEarning::whereIn('user_type',['admin', 'demo_admin'])->whereIn('commission_status', ['unpaid','paid'])->sum('commission_amount') ?? 0;
         $promotionalBannerAmount = PromotionalBanner::where('payment_status', 'paid')->sum('total_amount');
         $data['total_earning']  = CommissionEarning::whereIn('user_type', ['admin', 'demo_admin'])
             ->whereIn('commission_status', ['unpaid', 'paid'])
             ->sum('commission_amount') ?? 0;
-        $data['total_earning'] += $promotionalBannerAmount + $data['cancellationcharge'] + $data['total_subscription_amout'];
-
-
-        $data['total_earning'] += $data['cancellationcharge'] + $data['total_subscription_amout'];
+        $data['total_earning'] += $promotionalBannerAmount + $data['cancellationcharge'] + $data['total_subscription_amout'] + $paidProductOrderSubtotal;
         // dd($data);
 
         //     $data['total_revenue'] = getPriceFormat($total_revenue);

@@ -803,6 +803,17 @@ class DashboardController extends Controller
             $query->whereIn('commission_status', ['unpaid', 'paid'])->groupBy('booking_id');
         })->sum('final_total_tax') ?? 0;
         $my_earning  =    CommissionEarning::whereIn('user_type', ['admin', 'demo_admin'])->whereIn('commission_status', ['unpaid', 'paid'])->sum('commission_amount') ?? 0;
+        $total_revenue = CommissionEarning::whereIn('commission_status', ['paid', 'unpaid'])->sum('commission_amount') ?? 0;
+        if (Schema::hasTable('product_orders') && Schema::hasColumn('product_orders', 'payment_status')) {
+            $paidProductOrders = ProductOrder::where('payment_status', 'paid');
+            $paidProductOrderSubtotal = $paidProductOrders->sum('subtotal');
+            $my_earning += $paidProductOrderSubtotal;
+            $total_revenue += $paidProductOrderSubtotal;
+
+            if (Schema::hasColumn('product_orders', 'tax_total')) {
+                $total_tax += ProductOrder::where('payment_status', 'paid')->sum('tax_total');
+            }
+        }
         $response = [
             'status'                        => true,
             'total_booking'                 => Booking::myBooking()->count(),
@@ -811,7 +822,7 @@ class DashboardController extends Controller
             'total_provider'                => $totalProviders,
             'total_tax'                     => $total_tax,
             'my_earning'                    => $my_earning,
-            'total_revenue'                 => CommissionEarning::whereIn('commission_status', ['paid', 'unpaid'])->sum('commission_amount') ?? 0,
+            'total_revenue'                 => $total_revenue,
             'monthly_revenue'               => adminEarning(),
             'provider'                      => UserResource::collection(User::myUsers('get_provider')->orderBy('id', 'DESC')->take(5)->get()),
             'user'                          => UserResource::collection(User::myUsers('get_customer')->orderBy('id', 'DESC')->take(5)->get()),

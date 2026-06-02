@@ -1207,6 +1207,18 @@ function adminEarning()
         ->keyBy('month')
         ->toArray();
 
+    $productOrderData = [];
+    if (\Illuminate\Support\Facades\Schema::hasTable('product_orders')
+        && \Illuminate\Support\Facades\Schema::hasColumn('product_orders', 'payment_status')) {
+        $productOrderData = \App\Models\ProductOrder::selectRaw('sum(subtotal) as total, DATE_FORMAT(updated_at, "%m") as month')
+            ->whereYear('updated_at', date('Y'))
+            ->where('payment_status', 'paid')
+            ->groupBy('month')
+            ->get()
+            ->keyBy('month')
+            ->toArray();
+    }
+
     // Prepare data for the graph
     $data['revenueData'] = [];
     $data['revenueLabelData'] = [];
@@ -1217,9 +1229,10 @@ function adminEarning()
         $cancellation = $cancellationData[$month]['total'] ?? 0;
         $total_subscription_amout = $total_subscription_amout_data[$month]['total'] ?? 0;
         $promotional = $promotionalBannerData[$month]['total'] ?? 0;
+        $productOrders = $productOrderData[$month]['total'] ?? 0;
 
         // Add all earnings including promotional banners
-        $data['revenueData'][] = $commission + $cancellation + $total_subscription_amout + $promotional;
+        $data['revenueData'][] = $commission + $cancellation + $total_subscription_amout + $promotional + $productOrders;
         $data['revenueLabelData'][] = $month;
     }
 
