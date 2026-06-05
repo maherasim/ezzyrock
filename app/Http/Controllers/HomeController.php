@@ -1041,11 +1041,45 @@ class HomeController extends Controller
                 break;
             case 'service_attachment':
                 $media = Media::find($request->id);
+                if (!$media) {
+                    return comman_custom_response([
+                        'status' => false,
+                        'message' => __('messages.not_found_entry', ['name' => __('messages.attachments')])
+                    ]);
+                }
+                $media->delete();
+                $message = __('messages.msg_removed', ['name' => __('messages.attachments')]);
+                break;
+            case 'product_attachment':
+                $media = Media::find($request->id);
+                if (!$media) {
+                    return comman_custom_response([
+                        'status' => false,
+                        'message' => __('messages.not_found_entry', ['name' => __('messages.attachments')])
+                    ]);
+                }
+                $media->delete();
+                $message = __('messages.msg_removed', ['name' => __('messages.attachments')]);
+                break;
+            case 'post_attachment':
+                $media = Media::find($request->id);
+                if (!$media) {
+                    return comman_custom_response([
+                        'status' => false,
+                        'message' => __('messages.not_found_entry', ['name' => __('messages.attachments')])
+                    ]);
+                }
                 $media->delete();
                 $message = __('messages.msg_removed', ['name' => __('messages.attachments')]);
                 break;
             case 'helpdesk_attachment':
                 $media = Media::find($request->id);
+                if (!$media) {
+                    return comman_custom_response([
+                        'status' => false,
+                        'message' => __('messages.not_found_entry', ['name' => __('messages.attachments')])
+                    ]);
+                }
                 $media->delete();
                 $message = __('messages.msg_removed', ['name' => __('messages.attachments')]);
                 break;

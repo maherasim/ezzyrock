@@ -128,18 +128,13 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('delete-booking-rating', [API\BookingController::class, 'deleteBookingRating']);
     Route::get('get-user-ratings', [API\BookingController::class, 'getUserRatings']);
     //Route::get('earning-breakdown', [ API\BookingController::class, 'getEarningsBreakdown' ] );
-
     Route::get('loyalty-history', [App\Http\Controllers\LoyaltyPointActivityController::class, 'getLoyaltyHistory']);
     Route::get('get-earn-points', [App\Http\Controllers\LoyaltyEarnRuleController::class, 'userEarnPointsByService']);
-
     Route::post('save-favourite', [API\ServiceController::class, 'saveFavouriteService']);
     Route::post('delete-favourite', [API\ServiceController::class, 'deleteFavouriteService']);
     Route::get('user-favourite-service', [API\ServiceController::class, 'getUserFavouriteService']);
-
     Route::post('booking-action', [API\BookingController::class, 'action']);
-
     Route::post('booking-assigned', [App\Http\Controllers\BookingController::class, 'bookingAssigned']);
-
     Route::post('user-update-status', [API\User\UserController::class, 'userStatusUpdate']);
     Route::post('change-password', [API\User\UserController::class, 'changePassword']);
     Route::post('update-profile', [API\User\UserController::class, 'updateProfile']);

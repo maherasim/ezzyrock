@@ -210,6 +210,18 @@ class CommonNotification extends Notification implements ShouldQueue
         $heading = $this->data['type'] ?? '';
 
         $additionalData = json_encode($this->data);
+        $isAddBookingNotification = ($this->data['notification-type'] ?? null) === 'add_booking'
+            && ($this->data['check_booking_type'] ?? null) === 'booking';
+        $notificationSound = $isAddBookingNotification ? 'leo' : 'default';
+        $androidNotification = [
+            "click_action" => "FLUTTER_NOTIFICATION_CLICK",
+        ];
+
+        if ($isAddBookingNotification) {
+            $androidNotification["channel_id"] = "booking_notification";
+            $androidNotification["sound"] = $notificationSound;
+        }
+
         return fcm([
             "message" => [
                 "topic" => 'user_' . $notifiable->id,
@@ -218,7 +230,7 @@ class CommonNotification extends Notification implements ShouldQueue
                     "body" => $msg,
                 ],
                 "data" => [
-                    "sound" => "default",
+                    "sound" => $notificationSound,
                     "title" => $heading,
                     "body" => $msg,
                     "story_id" => "story_12345",
@@ -228,9 +240,7 @@ class CommonNotification extends Notification implements ShouldQueue
                 ],
                 "android" => [
                     "priority" => "high",
-                    "notification" => [
-                        "click_action" => "FLUTTER_NOTIFICATION_CLICK",
-                    ],
+                    "notification" => $androidNotification,
                 ],
                 "apns" => [
                     "payload" => [

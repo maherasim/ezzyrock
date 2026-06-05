@@ -268,6 +268,26 @@
                                                 $('input[name="service_attachment[]"]').removeAttr('required');
                                             }
                                         }
+                                        if (jQuery.inArray(response.preview, ["product_attachment_preview"]) !== -1) {
+                                             $('#'+response.preview+"_"+response.id).closest('.col-md-2').remove();
+                                            let total_file = $('.remove-file').length;
+                                            if(total_file == 0){
+                                                $('input[name="product_attachment[]"]').attr('required', true);
+                                                clearFileInput("product_attachment[]", "product_attachment_label");
+                                            } else {
+                                                $('input[name="product_attachment[]"]').removeAttr('required');
+                                            }
+                                        }
+                                        if (jQuery.inArray(response.preview, ["post_attachment_preview"]) !== -1) {
+                                             $('#'+response.preview+"_"+response.id).closest('.col-md-2').remove();
+                                            let total_file = $('.remove-file').length;
+                                            if(total_file == 0){
+                                                $('input[name="post_attachment[]"]').attr('required', true);
+                                                clearFileInput("post_attachment[]", "post_attachment_label");
+                                            } else {
+                                                $('input[name="post_attachment[]"]').removeAttr('required');
+                                            }
+                                        }
                                         if (jQuery.inArray(response.preview, ["helpdesk_attachment_preview"]) !== -1) {
                                             $('#'+response.preview+"_"+response.id).remove()
                                             let total_file = $('.remove-file').length;
