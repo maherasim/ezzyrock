@@ -288,6 +288,7 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::resource('payment', PaymentController::class);
     Route::get('cash-payment-list', [PaymentController::class, 'cashDatatable'])->name('cash.list');
     Route::get('cash-index-data', [PaymentController::class, 'cash_index_data'])->name('cash.index_data');
+    Route::get('cash-order-index-data', [PaymentController::class, 'cash_order_index_data'])->name('cash.order_index_data');
     Route::get('payment-index-data', [PaymentController::class, 'index_data'])->name('payment.index_data');
     Route::get('payment-subscription-index-data', [PaymentController::class, 'subscription_index_data'])->name('payment.subscription_index_data');
     Route::post('payment-bulk-action', [PaymentController::class, 'bulk_action'])->name('payment.bulk-action');

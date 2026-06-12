@@ -734,7 +734,7 @@ class DashboardController extends Controller
         $commission = HandymanType::where('id', $handyman->handymantype_id)->first();
 
         $total_revenue    = HandymanPayout::where('handyman_id', auth()->user()->id)->sum('amount') ?? 0;
-        $remaining_payout  = CommissionEarning::where('employee_id', $handyman->id)->where('commission_status', 'unpaid')->sum('commission_amount') ?? 0;
+        $remaining_payout  = CommissionEarning::where('employee_id', $handyman->id)->whereIn('commission_status', ['unpaid', 'pending'])->sum('commission_amount') ?? 0;
 
         $revenuedata = HandymanPayout::selectRaw('sum(amount) as total , DATE_FORMAT(updated_at , "%m") as month')
             ->where('handyman_id', auth()->user()->id)

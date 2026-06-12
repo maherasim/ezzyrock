@@ -12,6 +12,7 @@ use Facade\Ignition\DumpRecorder\Dump;
 use Yajra\DataTables\DataTables;
 use App\Models\Booking;
 use App\Models\CommissionEarning;
+use App\Models\ProductOrder;
 
 class PaymentController extends Controller
 {
@@ -189,7 +190,55 @@ class PaymentController extends Controller
             ->toJson();
     }
 
+    public function cash_order_index_data(DataTables $datatable, Request $request)
+    {
+        $query = ProductOrder::query()->with(['user', 'items'])->where('payment_type', 'cash');
 
+        $filter = $request->filter;
+        if (isset($filter['column_status']) && $filter['column_status'] !== '') {
+            $query->where('payment_status', $filter['column_status']);
+        }
+
+        $sitesetup = Setting::where('type', 'site-setup')->where('key', 'site-setup')->first();
+        $datetime = json_decode(optional($sitesetup)->value);
+
+        return $datatable->eloquent($query)
+            ->addColumn('check', function ($row) {
+                return '<input type="checkbox" class="form-check-input select-table-row" id="order-row-'.$row->id.'" name="datatable_ids[]" value="'.$row->id.'">';
+            })
+            ->editColumn('order_number', function ($order) {
+                return '<span class="fw-bold text-primary">#'.$order->order_number.'</span>';
+            })
+            ->addColumn('products', function ($order) {
+                $names = $order->items->pluck('product_name')->implode(', ');
+                return $names ?: '—';
+            })
+            ->editColumn('user_id', function ($order) {
+                $user = $order->user;
+                if (!$user) return '—';
+                $profile = getSingleMedia($user, 'profile_image', null);
+                return '<div class="d-flex align-items-center gap-2">
+                    <img src="'.e($profile).'" class="rounded-circle" width="35" height="35" style="object-fit:cover;" onerror="this.src=\''.asset('images/user_placeholder.png').'\'">
+                    <div><div class="fw-semibold">'.e($user->display_name).'</div><small class="text-muted">'.e($user->email).'</small></div>
+                </div>';
+            })
+            ->editColumn('created_at', function ($order) use ($datetime) {
+                if ($datetime) {
+                    return date("$datetime->date_format $datetime->time_format", strtotime($order->created_at));
+                }
+                return $order->created_at->format('d M Y h:i A');
+            })
+            ->editColumn('payment_status', function ($order) {
+                $status = $order->payment_status ?? '—';
+                return '<span class="bg badge-primary">'.str_replace('_', ' ', ucfirst($status)).'</span>';
+            })
+            ->editColumn('total', function ($order) {
+                return getPriceFormat($order->total);
+            })
+            ->addIndexColumn()
+            ->rawColumns(['check', 'order_number', 'user_id', 'payment_status'])
+            ->toJson();
+    }
 
     public function index_data(DataTables $datatable,Request $request)
     {

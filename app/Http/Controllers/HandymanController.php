@@ -491,15 +491,15 @@ class HandymanController extends Controller
         $totalbooking = Booking::whereHas('handymanAdded', function ($query) use ($id) {
             $query->where('handyman_id', $id);
         })->count();
-        // Get total handyman payout and unpaid commission earnings
+        // Get total handyman payout and commission earnings (pending = completed but payment not yet paid, unpaid = payment received but not withdrawn)
         $totalWithdrawn = HandymanPayout::where('handyman_id', $id)->sum('amount') ?? 0;
         $pendingCommission = $handymandata->commission_earning()
             ->whereHas('getbooking', function ($query) {
                 $query->where('status', 'completed');
             })
-            ->where('commission_status', 'unpaid')
+            ->whereIn('commission_status', ['unpaid', 'pending'])
             ->sum('commission_amount');
-        $earning =    $pendingCommission ? $pendingCommission : 0;
+        $earning = $pendingCommission ? $pendingCommission : 0;
         // Calculate total earnings
         $walletAmount = optional($handymandata->wallet)->amount ?? 0;
         $totalEarnings = $totalWithdrawn + $earning;

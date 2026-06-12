@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Plans;
 use App\Models\ProviderSubscription;
 use App\Models\User;
+use App\Models\UserPlan;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,13 +33,20 @@ class AdminSubscriptionController extends Controller
             : ['classified'];
         $module = $subscriptionModules[0];
 
-        // One billing catalog (admin service plans); category only scopes the subscription record, not which plan rows load.
-        $plans = Plans::query()
-            ->where('status', 1)
-            ->where('module', subscription_billing_plan_module())
-            ->with('planlimit')
-            ->orderBy('amount')
-            ->get();
+        if ($targetUser->user_type === 'user') {
+            $plans = UserPlan::query()
+                ->where('status', 1)
+                ->with('planlimit')
+                ->orderBy('amount')
+                ->get();
+        } else {
+            $plans = Plans::query()
+                ->where('status', 1)
+                ->where('module', subscription_billing_plan_module())
+                ->with('planlimit')
+                ->orderBy('amount')
+                ->get();
+        }
 
         $activeSubscriptions = provider_subscriptions_valid_query($targetUser->id)
             ->whereIn('module', $subscriptionModules)
@@ -66,18 +74,20 @@ class AdminSubscriptionController extends Controller
             403
         );
 
+        $user = User::query()
+            ->where('id', (int) $request->get('user_id'))
+            ->whereIn('user_type', ['user', 'provider'])
+            ->firstOrFail();
+
+        $planTable = $user->user_type === 'user' ? 'user_plan' : 'plans';
+
         $validated = $request->validate([
             'user_id' => 'required|integer|exists:users,id',
             'module' => 'required|string|in:service,ecommerce,classified',
-            'plan_id' => 'required|integer|exists:plans,id',
+            'plan_id' => 'required|integer|exists:' . $planTable . ',id',
             'payment_type' => 'nullable|string|max:100',
             'notes' => 'nullable|string|max:1000',
         ]);
-
-        $user = User::query()
-            ->where('id', (int) $validated['user_id'])
-            ->whereIn('user_type', ['user', 'provider'])
-            ->firstOrFail();
 
         $allowedModules = $user->user_type === 'provider'
             ? ['service', 'ecommerce']
@@ -88,11 +98,18 @@ class AdminSubscriptionController extends Controller
             ]);
         }
 
-        $plan = Plans::query()
-            ->where('id', (int) $validated['plan_id'])
-            ->where('status', 1)
-            ->where('module', subscription_billing_plan_module())
-            ->firstOrFail();
+        if ($user->user_type === 'user') {
+            $plan = UserPlan::query()
+                ->where('id', (int) $validated['plan_id'])
+                ->where('status', 1)
+                ->firstOrFail();
+        } else {
+            $plan = Plans::query()
+                ->where('id', (int) $validated['plan_id'])
+                ->where('status', 1)
+                ->where('module', subscription_billing_plan_module())
+                ->firstOrFail();
+        }
 
         $subscriptionModules = $user->user_type === 'provider'
             ? ['service', 'ecommerce']
