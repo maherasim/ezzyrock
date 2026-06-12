@@ -131,11 +131,6 @@ class CategoryController extends Controller
                     $link = $name;
                 }
 
-                // Only service categories keep image in admin list
-                if ($query->module_type !== Category::MODULE_SERVICE) {
-                    return $link;
-                }
-
                 $imageUrls = getSingleMedia($query, 'category_image', null);
                 if (!is_array($imageUrls)) {
                     $imageUrls = [$imageUrls];
