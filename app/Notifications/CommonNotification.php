@@ -211,7 +211,7 @@ class CommonNotification extends Notification implements ShouldQueue
 
         $additionalData = json_encode($this->data);
         $isAddBookingNotification = ($this->data['notification-type'] ?? null) === 'add_booking'
-            && ($this->data['check_booking_type'] ?? null) === 'booking';
+            && in_array($this->data['check_booking_type'] ?? null, ['booking', 'product_order']);
         $notificationSound = $isAddBookingNotification ? 'leo' : 'default';
         $androidNotification = [
             "click_action" => "FLUTTER_NOTIFICATION_CLICK",
