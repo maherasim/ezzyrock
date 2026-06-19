@@ -7,6 +7,40 @@
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <!-- Leaflet Draw CSS -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+        <style>
+            #map {
+                height: 500px;
+                width: 100%;
+                border-radius: 8px;
+                z-index: 1;
+                position: relative;
+            }
+            .leaflet-draw-actions {
+                z-index: 1000 !important;
+            }
+            .leaflet-draw {
+                z-index: 1000 !important;
+            }
+            .leaflet-marker-icon.leaflet-div-icon {
+                background: white !important;
+                border: 2px solid #007bff !important;
+                border-radius: 50% !important;
+                width: 16px !important;
+                height: 16px !important;
+                box-shadow: 0 0 4px rgba(0, 123, 255, 0.5) !important;
+            }
+            .leaflet-editing-icon {
+                background: white !important;
+                border: 2px solid #ff6b6b !important;
+                border-radius: 50% !important;
+                width: 16px !important;
+                height: 16px !important;
+                box-shadow: 0 0 6px rgba(255, 107, 107, 0.7) !important;
+            }
+            .leaflet-draw-polygon .leaflet-draw-guide-dash {
+                stroke-dasharray: 5, 5;
+            }
+        </style>
     </head>
 
     <div class="container-fluid">
@@ -113,11 +147,9 @@
             const drawControl = new L.Control.Draw({
                 edit: {
                     featureGroup: drawnItems,
-                    remove: true,
                     poly: {
                         allowIntersection: false
                     },
-                    edit: true,
                     remove: true
                 },
                 draw: {
@@ -125,22 +157,25 @@
                         allowIntersection: false,
                         showArea: true,
                         shapeOptions: {
-                            color: '#555',
-                            fillColor: '#555',
-                            fillOpacity: 0.4,
-                            weight: 2
+                            color: '#007bff',
+                            fillColor: '#0d6efd',
+                            fillOpacity: 0.3,
+                            weight: 3,
+                            dashArray: '5, 5'
                         }
                     },
                     polyline: false,
                     rectangle: false,
                     circle: {
                         shapeOptions: {
-                            color: '#555',
-                            fillColor: '#555',
-                            fillOpacity: 0.4,
-                            weight: 2
+                            color: '#007bff',
+                            fillColor: '#0d6efd',
+                            fillOpacity: 0.3,
+                            weight: 3,
+                            dashArray: '5, 5'
                         },
-                        showRadius: true
+                        showRadius: true,
+                        metric: true
                     },
                     marker: false,
                     circlemarker: false
@@ -187,13 +222,53 @@
         function updateCoordinates() {
             const layers = drawnItems.getLayers();
             if (layers.length > 0) {
-                const latlngs = layers[0].getLatLngs()[0];
-                const coordinates = latlngs.map(latlng => ({
-                    lat: latlng.lat,
-                    lng: latlng.lng
-                }));
+                const layer = layers[0];
+                let coordinates = [];
+
+                // Handle Circle
+                if (layer instanceof L.Circle) {
+                    const center = layer.getLatLng();
+                    const radius = layer.getRadius();
+                    // Generate circle perimeter points for polygon representation
+                    const points = 32; // Number of points to draw circle
+                    for (let i = 0; i < points; i++) {
+                        const angle = (i / points) * 2 * Math.PI;
+                        const point = L.LatLng.prototype.destinationPoint ? 
+                            center.destinationPoint(angle, radius) :
+                            calculateDestinationPoint(center, angle, radius);
+                        coordinates.push({
+                            lat: point.lat,
+                            lng: point.lng
+                        });
+                    }
+                } 
+                // Handle Polygon/Polyline
+                else if (layer.getLatLngs) {
+                    const latlngs = layer.getLatLngs();
+                    // Handle nested array for polygons
+                    const points = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+                    coordinates = points.map(latlng => ({
+                        lat: latlng.lat,
+                        lng: latlng.lng
+                    }));
+                }
+
                 document.getElementById('coordinates').value = JSON.stringify(coordinates);
             }
+        }
+
+        // Helper function to calculate destination point
+        function calculateDestinationPoint(center, angle, radius) {
+            const R = 6371000; // Earth radius in meters
+            const lat1 = center.lat * Math.PI / 180;
+            const lon1 = center.lng * Math.PI / 180;
+            
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(radius / R) +
+                Math.cos(lat1) * Math.sin(radius / R) * Math.cos(angle));
+            const lon2 = lon1 + Math.atan2(Math.sin(angle) * Math.sin(radius / R) * Math.cos(lat1),
+                Math.cos(radius / R) - Math.sin(lat1) * Math.sin(lat2));
+            
+            return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
         }
 
         document.addEventListener('DOMContentLoaded', function () {
