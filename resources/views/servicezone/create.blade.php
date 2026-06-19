@@ -113,6 +113,11 @@
             const drawControl = new L.Control.Draw({
                 edit: {
                     featureGroup: drawnItems,
+                    remove: true,
+                    poly: {
+                        allowIntersection: false
+                    },
+                    edit: true,
                     remove: true
                 },
                 draw: {
@@ -128,7 +133,15 @@
                     },
                     polyline: false,
                     rectangle: false,
-                    circle: false,
+                    circle: {
+                        shapeOptions: {
+                            color: '#555',
+                            fillColor: '#555',
+                            fillOpacity: 0.4,
+                            weight: 2
+                        },
+                        showRadius: true
+                    },
                     marker: false,
                     circlemarker: false
                 }
