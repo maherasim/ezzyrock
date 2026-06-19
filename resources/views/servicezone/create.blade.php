@@ -94,10 +94,89 @@
     <!-- Leaflet Draw JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
+    <style>
+        .circle-resize-handle {
+            width: 14px !important;
+            height: 14px !important;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 50%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+            cursor: move;
+            margin-left: -7px !important;
+            margin-top: -7px !important;
+        }
+    </style>
+
     <script>
         let map;
         let drawnItems;
         let existingCoordinates = {!! isset($servicezone->coordinates) ? json_encode($servicezone->coordinates) : 'null' !!};
+
+        // Circle resize handle state
+        let activeCircle = null;
+        let circleHandles = [];
+
+        const handleIcon = L.divIcon({
+            className: 'circle-resize-handle',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+
+        // Angles for N, E, S, W handles
+        const HANDLE_ANGLES = [
+            -Math.PI / 2, // North (up)
+            0,            // East (right)
+            Math.PI / 2,  // South (down)
+            Math.PI       // West (left)
+        ];
+
+        function calculateDestinationPoint(center, angle, radius) {
+            const R = 6371000;
+            const lat1 = center.lat * Math.PI / 180;
+            const lon1 = center.lng * Math.PI / 180;
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(radius / R) +
+                Math.cos(lat1) * Math.sin(radius / R) * Math.cos(angle));
+            const lon2 = lon1 + Math.atan2(Math.sin(angle) * Math.sin(radius / R) * Math.cos(lat1),
+                Math.cos(radius / R) - Math.sin(lat1) * Math.sin(lat2));
+            return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
+        }
+
+        function clearCircleHandles() {
+            circleHandles.forEach(m => map.removeLayer(m));
+            circleHandles = [];
+            activeCircle = null;
+        }
+
+        function refreshHandlePositions() {
+            if (!activeCircle || circleHandles.length === 0) return;
+            const center = activeCircle.getLatLng();
+            const radius = activeCircle.getRadius();
+            HANDLE_ANGLES.forEach((angle, i) => {
+                circleHandles[i].setLatLng(calculateDestinationPoint(center, angle, radius));
+            });
+        }
+
+        function addCircleHandles(circle) {
+            clearCircleHandles();
+            activeCircle = circle;
+            const center = circle.getLatLng();
+            const radius = circle.getRadius();
+
+            HANDLE_ANGLES.forEach(angle => {
+                const pos = calculateDestinationPoint(center, angle, radius);
+                const marker = L.marker(pos, { icon: handleIcon, draggable: true, zIndexOffset: 2000 }).addTo(map);
+
+                marker.on('drag', function (e) {
+                    const newRadius = activeCircle.getLatLng().distanceTo(e.target.getLatLng());
+                    activeCircle.setRadius(newRadius);
+                    refreshHandlePositions();
+                    updateCoordinates();
+                });
+
+                circleHandles.push(marker);
+            });
+        }
 
         function initMap() {
             map = L.map('map').setView([20.5937, 78.9629], 5);
@@ -113,31 +192,19 @@
             const drawControl = new L.Control.Draw({
                 edit: {
                     featureGroup: drawnItems,
-                    poly: {
-                        allowIntersection: false
-                    },
+                    poly: { allowIntersection: false },
                     remove: true
                 },
                 draw: {
                     polygon: {
                         allowIntersection: false,
                         showArea: true,
-                        shapeOptions: {
-                            color: '#555',
-                            fillColor: '#555',
-                            fillOpacity: 0.4,
-                            weight: 2
-                        }
+                        shapeOptions: { color: '#555', fillColor: '#555', fillOpacity: 0.4, weight: 2 }
                     },
                     polyline: false,
                     rectangle: false,
                     circle: {
-                        shapeOptions: {
-                            color: '#555',
-                            fillColor: '#555',
-                            fillOpacity: 0.4,
-                            weight: 2
-                        },
+                        shapeOptions: { color: '#555', fillColor: '#555', fillOpacity: 0.4, weight: 2 },
                         showRadius: true
                     },
                     marker: false,
@@ -146,15 +213,25 @@
             });
             map.addControl(drawControl);
 
+            // Hide custom handles while Leaflet.draw edit mode is active
+            map.on(L.Draw.Event.EDITSTART, function () {
+                circleHandles.forEach(m => m.setOpacity(0).dragging.disable());
+            });
+            map.on(L.Draw.Event.EDITSTOP, function () {
+                // Refresh positions in case circle was moved in edit mode
+                if (activeCircle) {
+                    refreshHandlePositions();
+                    circleHandles.forEach(m => { m.setOpacity(1); m.dragging.enable(); });
+                }
+                updateCoordinates();
+            });
+
             // Load existing polygon when editing
             if (existingCoordinates && existingCoordinates.length > 0) {
                 try {
                     const latlngs = existingCoordinates.map(c => [c.lat, c.lng]);
                     const polygon = L.polygon(latlngs, {
-                        color: '#555',
-                        fillColor: '#555',
-                        fillOpacity: 0.4,
-                        weight: 2
+                        color: '#555', fillColor: '#555', fillOpacity: 0.4, weight: 2
                     });
                     drawnItems.addLayer(polygon);
                     map.fitBounds(polygon.getBounds());
@@ -164,20 +241,23 @@
                 }
             }
 
-            // New shape drawn
             map.on(L.Draw.Event.CREATED, function (e) {
                 drawnItems.clearLayers();
-                drawnItems.addLayer(e.layer);
+                clearCircleHandles();
+                const layer = e.layer;
+                drawnItems.addLayer(layer);
+                if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
+                    addCircleHandles(layer);
+                }
                 updateCoordinates();
             });
 
-            // Shape edited
             map.on(L.Draw.Event.EDITED, function () {
                 updateCoordinates();
             });
 
-            // Polygon deleted
             map.on(L.Draw.Event.DELETED, function () {
+                clearCircleHandles();
                 document.getElementById('coordinates').value = '[]';
             });
         }
@@ -188,48 +268,23 @@
                 const layer = layers[0];
                 let coordinates = [];
 
-                // Handle Circle
                 if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
                     const center = layer.getLatLng();
                     const radius = layer.getRadius();
-                    // Generate circle perimeter points for polygon representation
-                    const points = 32; // Number of points to draw circle
-                    for (let i = 0; i < points; i++) {
-                        const angle = (i / points) * 2 * Math.PI;
+                    const pts = 64;
+                    for (let i = 0; i < pts; i++) {
+                        const angle = (i / pts) * 2 * Math.PI;
                         const point = calculateDestinationPoint(center, angle, radius);
-                        coordinates.push({
-                            lat: point.lat,
-                            lng: point.lng
-                        });
+                        coordinates.push({ lat: point.lat, lng: point.lng });
                     }
-                } 
-                // Handle Polygon/Polyline
-                else if (layer.getLatLngs) {
+                } else if (layer.getLatLngs) {
                     const latlngs = layer.getLatLngs();
-                    // Handle nested array for polygons
                     const points = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
-                    coordinates = points.map(latlng => ({
-                        lat: latlng.lat,
-                        lng: latlng.lng
-                    }));
+                    coordinates = points.map(latlng => ({ lat: latlng.lat, lng: latlng.lng }));
                 }
 
                 document.getElementById('coordinates').value = JSON.stringify(coordinates);
             }
-        }
-
-        // Helper function to calculate destination point
-        function calculateDestinationPoint(center, angle, radius) {
-            const R = 6371000; // Earth radius in meters
-            const lat1 = center.lat * Math.PI / 180;
-            const lon1 = center.lng * Math.PI / 180;
-            
-            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(radius / R) +
-                Math.cos(lat1) * Math.sin(radius / R) * Math.cos(angle));
-            const lon2 = lon1 + Math.atan2(Math.sin(angle) * Math.sin(radius / R) * Math.cos(lat1),
-                Math.cos(radius / R) - Math.sin(lat1) * Math.sin(lat2));
-            
-            return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -238,10 +293,8 @@
             document.getElementById('servicezone').addEventListener('submit', function (e) {
                 const coordInput = document.getElementById('coordinates');
                 const coords = coordInput.value;
-
                 try {
                     const parsedCoords = JSON.parse(coords);
-
                     if (!Array.isArray(parsedCoords) || parsedCoords.length < 3) {
                         e.preventDefault();
                         showCoordinateError("{{ __('messages.please_draw_zone') }}");
@@ -256,16 +309,12 @@
 
             function showCoordinateError(message) {
                 const errorBlock = document.querySelector('#coordinates ~ .help-block');
-                if (errorBlock) {
-                    errorBlock.textContent = message;
-                }
+                if (errorBlock) errorBlock.textContent = message;
             }
 
             function clearCoordinateError() {
                 const errorBlock = document.querySelector('#coordinates ~ .help-block');
-                if (errorBlock) {
-                    errorBlock.textContent = '';
-                }
+                if (errorBlock) errorBlock.textContent = '';
             }
         });
     </script>
