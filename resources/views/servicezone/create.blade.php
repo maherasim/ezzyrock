@@ -79,6 +79,32 @@
             </div>
         </div>
 
+        <div class="card">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3">📍 Choose Your Shape for Multi-Directional Stretching:</h6>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded" style="border-color: #007bff !important;">
+                            <p><strong style="color: #007bff;">📐 Polygon (Blue)</strong></p>
+                            <small>Click multiple points on map. Drag any vertex to resize. Great for custom irregular zones.</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded" style="border-color: #28a745 !important;">
+                            <p><strong style="color: #28a745;">📦 Rectangle (Green)</strong></p>
+                            <small>Click and drag to draw. Drag corners to stretch in all directions. Perfect for multi-dimensional zones.</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 border rounded" style="border-color: #ffc107 !important;">
+                            <p><strong style="color: #ffc107;">🟡 Circle (Yellow)</strong></p>
+                            <small>Click center point, drag to set radius. Drag radius handle to expand uniformly in all directions.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
 
         <!-- Full Width Card -->
         <div class="card">
@@ -165,11 +191,20 @@
                         }
                     },
                     polyline: false,
-                    rectangle: false,
+                    rectangle: {
+                        shapeOptions: {
+                            color: '#28a745',
+                            fillColor: '#28a745',
+                            fillOpacity: 0.3,
+                            weight: 3,
+                            dashArray: '5, 5'
+                        },
+                        showArea: true
+                    },
                     circle: {
                         shapeOptions: {
-                            color: '#007bff',
-                            fillColor: '#0d6efd',
+                            color: '#ffc107',
+                            fillColor: '#ffc107',
                             fillOpacity: 0.3,
                             weight: 3,
                             dashArray: '5, 5'
@@ -226,22 +261,35 @@
                 let coordinates = [];
 
                 // Handle Circle
-                if (layer instanceof L.Circle) {
+                if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
                     const center = layer.getLatLng();
                     const radius = layer.getRadius();
                     // Generate circle perimeter points for polygon representation
                     const points = 32; // Number of points to draw circle
                     for (let i = 0; i < points; i++) {
                         const angle = (i / points) * 2 * Math.PI;
-                        const point = L.LatLng.prototype.destinationPoint ? 
-                            center.destinationPoint(angle, radius) :
-                            calculateDestinationPoint(center, angle, radius);
+                        const point = calculateDestinationPoint(center, angle, radius);
                         coordinates.push({
                             lat: point.lat,
                             lng: point.lng
                         });
                     }
                 } 
+                // Handle Rectangle (which is a type of polygon)
+                else if (layer instanceof L.Rectangle) {
+                    const bounds = layer.getBounds();
+                    const nw = bounds.getNorthWest();
+                    const ne = bounds.getNorthEast();
+                    const se = bounds.getSouthEast();
+                    const sw = bounds.getSouthWest();
+                    
+                    coordinates = [
+                        { lat: nw.lat, lng: nw.lng },
+                        { lat: ne.lat, lng: ne.lng },
+                        { lat: se.lat, lng: se.lng },
+                        { lat: sw.lat, lng: sw.lng }
+                    ];
+                }
                 // Handle Polygon/Polyline
                 else if (layer.getLatLngs) {
                     const latlngs = layer.getLatLngs();
@@ -254,6 +302,7 @@
                 }
 
                 document.getElementById('coordinates').value = JSON.stringify(coordinates);
+                console.log('Coordinates updated:', coordinates);
             }
         }
 
