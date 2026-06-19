@@ -7,40 +7,6 @@
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <!-- Leaflet Draw CSS -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-        <style>
-            #map {
-                height: 500px;
-                width: 100%;
-                border-radius: 8px;
-                z-index: 1;
-                position: relative;
-            }
-            .leaflet-draw-actions {
-                z-index: 1000 !important;
-            }
-            .leaflet-draw {
-                z-index: 1000 !important;
-            }
-            .leaflet-marker-icon.leaflet-div-icon {
-                background: white !important;
-                border: 2px solid #007bff !important;
-                border-radius: 50% !important;
-                width: 16px !important;
-                height: 16px !important;
-                box-shadow: 0 0 4px rgba(0, 123, 255, 0.5) !important;
-            }
-            .leaflet-editing-icon {
-                background: white !important;
-                border: 2px solid #ff6b6b !important;
-                border-radius: 50% !important;
-                width: 16px !important;
-                height: 16px !important;
-                box-shadow: 0 0 6px rgba(255, 107, 107, 0.7) !important;
-            }
-            .leaflet-draw-polygon .leaflet-draw-guide-dash {
-                stroke-dasharray: 5, 5;
-            }
-        </style>
     </head>
 
     <div class="container-fluid">
@@ -76,32 +42,6 @@
                     {{__('messages.to_start_pinning_points_on_the_map_and_connect_them_to_draw_a_zone_Minimum_3_points_required')}} <br>
                     <span class="text-muted"></span>
                 </p>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-body">
-                <h6 class="fw-bold mb-3">📍 Choose Your Shape for Multi-Directional Stretching:</h6>
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="p-3 border rounded" style="border-color: #007bff !important;">
-                            <p><strong style="color: #007bff;">📐 Polygon (Blue)</strong></p>
-                            <small>Click multiple points on map. Drag any vertex to resize. Great for custom irregular zones.</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="p-3 border rounded" style="border-color: #28a745 !important;">
-                            <p><strong style="color: #28a745;">📦 Rectangle (Green)</strong></p>
-                            <small>Click and drag to draw. Drag corners to stretch in all directions. Perfect for multi-dimensional zones.</small>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="p-3 border rounded" style="border-color: #ffc107 !important;">
-                            <p><strong style="color: #ffc107;">🟡 Circle (Yellow)</strong></p>
-                            <small>Click center point, drag to set radius. Drag radius handle to expand uniformly in all directions.</small>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -173,9 +113,11 @@
             const drawControl = new L.Control.Draw({
                 edit: {
                     featureGroup: drawnItems,
+                    remove: true,
                     poly: {
                         allowIntersection: false
                     },
+                    edit: true,
                     remove: true
                 },
                 draw: {
@@ -183,34 +125,22 @@
                         allowIntersection: false,
                         showArea: true,
                         shapeOptions: {
-                            color: '#007bff',
-                            fillColor: '#0d6efd',
-                            fillOpacity: 0.3,
-                            weight: 3,
-                            dashArray: '5, 5'
+                            color: '#555',
+                            fillColor: '#555',
+                            fillOpacity: 0.4,
+                            weight: 2
                         }
                     },
                     polyline: false,
-                    rectangle: {
-                        shapeOptions: {
-                            color: '#28a745',
-                            fillColor: '#28a745',
-                            fillOpacity: 0.3,
-                            weight: 3,
-                            dashArray: '5, 5'
-                        },
-                        showArea: true
-                    },
+                    rectangle: false,
                     circle: {
                         shapeOptions: {
-                            color: '#ffc107',
-                            fillColor: '#ffc107',
-                            fillOpacity: 0.3,
-                            weight: 3,
-                            dashArray: '5, 5'
+                            color: '#555',
+                            fillColor: '#555',
+                            fillOpacity: 0.4,
+                            weight: 2
                         },
-                        showRadius: true,
-                        metric: true
+                        showRadius: true
                     },
                     marker: false,
                     circlemarker: false
@@ -257,67 +187,13 @@
         function updateCoordinates() {
             const layers = drawnItems.getLayers();
             if (layers.length > 0) {
-                const layer = layers[0];
-                let coordinates = [];
-
-                // Handle Circle
-                if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
-                    const center = layer.getLatLng();
-                    const radius = layer.getRadius();
-                    // Generate circle perimeter points for polygon representation
-                    const points = 32; // Number of points to draw circle
-                    for (let i = 0; i < points; i++) {
-                        const angle = (i / points) * 2 * Math.PI;
-                        const point = calculateDestinationPoint(center, angle, radius);
-                        coordinates.push({
-                            lat: point.lat,
-                            lng: point.lng
-                        });
-                    }
-                } 
-                // Handle Rectangle (which is a type of polygon)
-                else if (layer instanceof L.Rectangle) {
-                    const bounds = layer.getBounds();
-                    const nw = bounds.getNorthWest();
-                    const ne = bounds.getNorthEast();
-                    const se = bounds.getSouthEast();
-                    const sw = bounds.getSouthWest();
-                    
-                    coordinates = [
-                        { lat: nw.lat, lng: nw.lng },
-                        { lat: ne.lat, lng: ne.lng },
-                        { lat: se.lat, lng: se.lng },
-                        { lat: sw.lat, lng: sw.lng }
-                    ];
-                }
-                // Handle Polygon/Polyline
-                else if (layer.getLatLngs) {
-                    const latlngs = layer.getLatLngs();
-                    // Handle nested array for polygons
-                    const points = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
-                    coordinates = points.map(latlng => ({
-                        lat: latlng.lat,
-                        lng: latlng.lng
-                    }));
-                }
-
+                const latlngs = layers[0].getLatLngs()[0];
+                const coordinates = latlngs.map(latlng => ({
+                    lat: latlng.lat,
+                    lng: latlng.lng
+                }));
                 document.getElementById('coordinates').value = JSON.stringify(coordinates);
-                console.log('Coordinates updated:', coordinates);
             }
-        }
-
-        // Helper function to calculate destination point
-        function calculateDestinationPoint(center, angle, radius) {
-            const R = 6371000; // Earth radius in meters
-            const lat1 = center.lat * Math.PI / 180;
-            const lon1 = center.lng * Math.PI / 180;
-            
-            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(radius / R) +
-                Math.cos(lat1) * Math.sin(radius / R) * Math.cos(angle));
-            const lon2 = lon1 + Math.atan2(Math.sin(angle) * Math.sin(radius / R) * Math.cos(lat1),
-                Math.cos(radius / R) - Math.sin(lat1) * Math.sin(lat2));
-            
-            return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
         }
 
         document.addEventListener('DOMContentLoaded', function () {
