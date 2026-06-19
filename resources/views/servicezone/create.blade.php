@@ -165,11 +165,12 @@
             map.on(L.Draw.Event.CREATED, function (e) {
                 drawnItems.clearLayers();
                 let layer = e.layer;
+                let type = e.layerType;
                 
-                if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
+                if (type === 'circle') {
                     const center = layer.getLatLng();
                     const radius = layer.getRadius();
-                    const pts = 8; // Use 8 points to make it an editable octagon that resembles a circle but can be easily stretched
+                    const pts = 12; // Use 12 points for a better circle approximation
                     const latlngs = [];
                     for (let i = 0; i < pts; i++) {
                         const angle = (i / pts) * 2 * Math.PI;
