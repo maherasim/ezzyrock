@@ -164,14 +164,22 @@
                 }
             }
 
-            // New polygon drawn
+            // New shape drawn
             map.on(L.Draw.Event.CREATED, function (e) {
                 drawnItems.clearLayers();
-                drawnItems.addLayer(e.layer);
+
+                const layer = e.layer;
+                if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
+                    const polygon = createCirclePolygon(layer, 64);
+                    drawnItems.addLayer(polygon);
+                } else {
+                    drawnItems.addLayer(layer);
+                }
+
                 updateCoordinates();
             });
 
-            // Polygon edited
+            // Shape edited
             map.on(L.Draw.Event.EDITED, function () {
                 updateCoordinates();
             });
@@ -230,6 +238,25 @@
                 Math.cos(radius / R) - Math.sin(lat1) * Math.sin(lat2));
             
             return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
+        }
+
+        function createCirclePolygon(circle, points = 64) {
+            const center = circle.getLatLng();
+            const radius = circle.getRadius();
+            const coordinates = [];
+
+            for (let i = 0; i < points; i++) {
+                const angle = (i / points) * 2 * Math.PI;
+                const point = calculateDestinationPoint(center, angle, radius);
+                coordinates.push([point.lat, point.lng]);
+            }
+
+            return L.polygon(coordinates, {
+                color: '#555',
+                fillColor: '#555',
+                fillOpacity: 0.4,
+                weight: 2
+            });
         }
 
         document.addEventListener('DOMContentLoaded', function () {
