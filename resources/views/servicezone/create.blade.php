@@ -95,10 +95,128 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
 
+    <style>
+        .circle-resize-handle {
+            width: 14px !important;
+            height: 14px !important;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 50%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+            cursor: move;
+            margin-left: -7px !important;
+            margin-top: -7px !important;
+        }
+    </style>
+
     <script>
         let map;
         let drawnItems;
         let existingCoordinates = {!! isset($servicezone->coordinates) ? json_encode($servicezone->coordinates) : 'null' !!};
+
+        let scaleHandles = [];
+        let activePolygon = null;
+
+        const handleIcon = L.divIcon({
+            className: 'circle-resize-handle',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
+
+        function clearScaleHandles() {
+            scaleHandles.forEach(m => map.removeLayer(m));
+            scaleHandles = [];
+            activePolygon = null;
+        }
+
+        function refreshScaleHandles(polygon) {
+            clearScaleHandles();
+            if (!polygon) return;
+            activePolygon = polygon;
+
+            const bounds = polygon.getBounds();
+            const north = bounds.getNorth();
+            const south = bounds.getSouth();
+            const east = bounds.getEast();
+            const west = bounds.getWest();
+            const center = bounds.getCenter();
+
+            const positions = [
+                { pos: L.latLng(north, center.lng), type: 'N' },
+                { pos: L.latLng(center.lat, east), type: 'E' },
+                { pos: L.latLng(south, center.lng), type: 'S' },
+                { pos: L.latLng(center.lat, west), type: 'W' },
+                { pos: center, type: 'C' }
+            ];
+
+            positions.forEach((item) => {
+                const marker = L.marker(item.pos, { icon: handleIcon, draggable: true, zIndexOffset: 2000 }).addTo(map);
+                
+                let baseLatLngs = [];
+                let baseCenter = null;
+                let origBounds = null;
+
+                marker.on('dragstart', function() {
+                    const latlngs = activePolygon.getLatLngs()[0];
+                    baseLatLngs = latlngs.map(ll => L.latLng(ll.lat, ll.lng));
+                    origBounds = activePolygon.getBounds();
+                    baseCenter = origBounds.getCenter();
+                });
+
+                marker.on('drag', function(e) {
+                    const currentPos = e.target.getLatLng();
+                    let newLatLngs = [];
+
+                    if (item.type === 'C') {
+                        const dLat = currentPos.lat - baseCenter.lat;
+                        const dLng = currentPos.lng - baseCenter.lng;
+                        newLatLngs = baseLatLngs.map(ll => L.latLng(ll.lat + dLat, ll.lng + dLng));
+                    } else {
+                        let scaleLat = 1;
+                        let scaleLng = 1;
+
+                        if (item.type === 'N' || item.type === 'S') {
+                            const origDist = Math.abs(item.type === 'N' ? origBounds.getNorth() - baseCenter.lat : origBounds.getSouth() - baseCenter.lat);
+                            const newDist = Math.abs(currentPos.lat - baseCenter.lat);
+                            if (origDist > 0) scaleLat = newDist / origDist;
+                        } else if (item.type === 'E' || item.type === 'W') {
+                            const origDist = Math.abs(item.type === 'E' ? origBounds.getEast() - baseCenter.lng : origBounds.getWest() - baseCenter.lng);
+                            const newDist = Math.abs(currentPos.lng - baseCenter.lng);
+                            if (origDist > 0) scaleLng = newDist / origDist;
+                        }
+
+                        if (scaleLat < 0.05) scaleLat = 0.05;
+                        if (scaleLng < 0.05) scaleLng = 0.05;
+
+                        newLatLngs = baseLatLngs.map(ll => {
+                            return L.latLng(
+                                baseCenter.lat + (ll.lat - baseCenter.lat) * scaleLat,
+                                baseCenter.lng + (ll.lng - baseCenter.lng) * scaleLng
+                            );
+                        });
+                    }
+
+                    activePolygon.setLatLngs(newLatLngs);
+                    
+                    const currentBounds = activePolygon.getBounds();
+                    const cCenter = currentBounds.getCenter();
+                    scaleHandles[0].setLatLng(L.latLng(currentBounds.getNorth(), cCenter.lng));
+                    scaleHandles[1].setLatLng(L.latLng(cCenter.lat, currentBounds.getEast()));
+                    scaleHandles[2].setLatLng(L.latLng(currentBounds.getSouth(), cCenter.lng));
+                    scaleHandles[3].setLatLng(L.latLng(cCenter.lat, currentBounds.getWest()));
+                    scaleHandles[4].setLatLng(cCenter);
+                    
+                    e.target.setLatLng(currentPos);
+                    updateCoordinates();
+                });
+
+                marker.on('dragend', function() {
+                    refreshScaleHandles(activePolygon);
+                });
+
+                scaleHandles.push(marker);
+            });
+        }
 
         function calculateDestinationPoint(center, angle, radius) {
             const R = 6371000;
@@ -156,6 +274,7 @@
                     });
                     drawnItems.addLayer(polygon);
                     map.fitBounds(polygon.getBounds());
+                    refreshScaleHandles(polygon);
                     updateCoordinates();
                 } catch (e) {
                     console.error('Error loading existing coordinates:', e);
@@ -164,13 +283,14 @@
 
             map.on(L.Draw.Event.CREATED, function (e) {
                 drawnItems.clearLayers();
+                clearScaleHandles();
                 let layer = e.layer;
                 let type = e.layerType;
                 
                 if (type === 'circle') {
                     const center = layer.getLatLng();
                     const radius = layer.getRadius();
-                    const pts = 12; // Use 12 points for a better circle approximation
+                    const pts = 32; // Use 32 points for a smooth circle, easily scalable with custom handles
                     const latlngs = [];
                     for (let i = 0; i < pts; i++) {
                         const angle = (i / pts) * 2 * Math.PI;
@@ -183,14 +303,30 @@
                 }
                 
                 drawnItems.addLayer(layer);
+                if (layer instanceof L.Polygon) {
+                    refreshScaleHandles(layer);
+                }
+                updateCoordinates();
+            });
+
+            map.on(L.Draw.Event.EDITSTART, function () {
+                // Hide custom handles during Leaflet edit mode
+                scaleHandles.forEach(m => { m.setOpacity(0); m.dragging.disable(); });
+            });
+            map.on(L.Draw.Event.EDITSTOP, function () {
+                // Restore custom handles
+                scaleHandles.forEach(m => { m.setOpacity(1); m.dragging.enable(); });
+                refreshScaleHandles(activePolygon);
                 updateCoordinates();
             });
 
             map.on(L.Draw.Event.EDITED, function () {
+                refreshScaleHandles(activePolygon);
                 updateCoordinates();
             });
 
             map.on(L.Draw.Event.DELETED, function () {
+                clearScaleHandles();
                 document.getElementById('coordinates').value = '[]';
             });
         }
