@@ -96,25 +96,16 @@
 
 
     <style>
-        /* Large white dot = vertex handle (matches Google Maps polygon edit style) */
-        .zone-vertex-handle {
-            width: 14px;
-            height: 14px;
+        .circle-resize-handle {
+            width: 14px !important;
+            height: 14px !important;
             background: white;
-            border: 2px solid #555;
+            border: 2px solid #333;
             border-radius: 50%;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
             cursor: move;
-        }
-        /* Smaller, lighter dot = midpoint handle (click-drag creates a new vertex) */
-        .zone-midpoint-handle {
-            width: 10px;
-            height: 10px;
-            background: rgba(255,255,255,0.85);
-            border: 2px solid #777;
-            border-radius: 50%;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-            cursor: crosshair;
+            margin-left: -7px !important;
+            margin-top: -7px !important;
         }
     </style>
 
@@ -123,14 +114,110 @@
         let drawnItems;
         let existingCoordinates = {!! isset($servicezone->coordinates) ? json_encode($servicezone->coordinates) : 'null' !!};
 
-        let activeLayer   = null;
-        let vertexMarkers = [];
-        let midptMarkers  = [];
+        let scaleHandles = [];
+        let activePolygon = null;
 
-        const vertexIcon = L.divIcon({ className: 'zone-vertex-handle',   iconSize:[14,14], iconAnchor:[7,7] });
-        const midptIcon  = L.divIcon({ className: 'zone-midpoint-handle',  iconSize:[10,10], iconAnchor:[5,5] });
+        const handleIcon = L.divIcon({
+            className: 'circle-resize-handle',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+        });
 
-        /* ── Haversine helper ───────────────────────────────────── */
+        function clearScaleHandles() {
+            scaleHandles.forEach(m => map.removeLayer(m));
+            scaleHandles = [];
+            activePolygon = null;
+        }
+
+        function refreshScaleHandles(polygon) {
+            clearScaleHandles();
+            if (!polygon) return;
+            activePolygon = polygon;
+
+            const bounds = polygon.getBounds();
+            const north = bounds.getNorth();
+            const south = bounds.getSouth();
+            const east = bounds.getEast();
+            const west = bounds.getWest();
+            const center = bounds.getCenter();
+
+            const positions = [
+                { pos: L.latLng(north, center.lng), type: 'N' },
+                { pos: L.latLng(center.lat, east), type: 'E' },
+                { pos: L.latLng(south, center.lng), type: 'S' },
+                { pos: L.latLng(center.lat, west), type: 'W' },
+                { pos: center, type: 'C' }
+            ];
+
+            positions.forEach((item) => {
+                const marker = L.marker(item.pos, { icon: handleIcon, draggable: true, zIndexOffset: 2000 }).addTo(map);
+                
+                let baseLatLngs = [];
+                let baseCenter = null;
+                let origBounds = null;
+
+                marker.on('dragstart', function() {
+                    const latlngs = activePolygon.getLatLngs()[0];
+                    baseLatLngs = latlngs.map(ll => L.latLng(ll.lat, ll.lng));
+                    origBounds = activePolygon.getBounds();
+                    baseCenter = origBounds.getCenter();
+                });
+
+                marker.on('drag', function(e) {
+                    const currentPos = e.target.getLatLng();
+                    let newLatLngs = [];
+
+                    if (item.type === 'C') {
+                        const dLat = currentPos.lat - baseCenter.lat;
+                        const dLng = currentPos.lng - baseCenter.lng;
+                        newLatLngs = baseLatLngs.map(ll => L.latLng(ll.lat + dLat, ll.lng + dLng));
+                    } else {
+                        let scaleLat = 1;
+                        let scaleLng = 1;
+
+                        if (item.type === 'N' || item.type === 'S') {
+                            const origDist = Math.abs(item.type === 'N' ? origBounds.getNorth() - baseCenter.lat : origBounds.getSouth() - baseCenter.lat);
+                            const newDist = Math.abs(currentPos.lat - baseCenter.lat);
+                            if (origDist > 0) scaleLat = newDist / origDist;
+                        } else if (item.type === 'E' || item.type === 'W') {
+                            const origDist = Math.abs(item.type === 'E' ? origBounds.getEast() - baseCenter.lng : origBounds.getWest() - baseCenter.lng);
+                            const newDist = Math.abs(currentPos.lng - baseCenter.lng);
+                            if (origDist > 0) scaleLng = newDist / origDist;
+                        }
+
+                        if (scaleLat < 0.05) scaleLat = 0.05;
+                        if (scaleLng < 0.05) scaleLng = 0.05;
+
+                        newLatLngs = baseLatLngs.map(ll => {
+                            return L.latLng(
+                                baseCenter.lat + (ll.lat - baseCenter.lat) * scaleLat,
+                                baseCenter.lng + (ll.lng - baseCenter.lng) * scaleLng
+                            );
+                        });
+                    }
+
+                    activePolygon.setLatLngs(newLatLngs);
+                    
+                    const currentBounds = activePolygon.getBounds();
+                    const cCenter = currentBounds.getCenter();
+                    scaleHandles[0].setLatLng(L.latLng(currentBounds.getNorth(), cCenter.lng));
+                    scaleHandles[1].setLatLng(L.latLng(cCenter.lat, currentBounds.getEast()));
+                    scaleHandles[2].setLatLng(L.latLng(currentBounds.getSouth(), cCenter.lng));
+                    scaleHandles[3].setLatLng(L.latLng(cCenter.lat, currentBounds.getWest()));
+                    scaleHandles[4].setLatLng(cCenter);
+                    
+                    e.target.setLatLng(currentPos);
+                    updateCoordinates();
+                });
+
+                marker.on('dragend', function() {
+                    refreshScaleHandles(activePolygon);
+                });
+
+                scaleHandles.push(marker);
+            });
+        }
+
         function calculateDestinationPoint(center, angle, radius) {
             const R = 6371000;
             const lat1 = center.lat * Math.PI / 180;
@@ -142,104 +229,7 @@
             return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
         }
 
-        function midLatLng(a, b) {
-            return L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2);
-        }
 
-        /* ── Remove all handles ─────────────────────────────────── */
-        function clearHandles() {
-            [...vertexMarkers, ...midptMarkers].forEach(m => map.removeLayer(m));
-            vertexMarkers = [];
-            midptMarkers  = [];
-            activeLayer   = null;
-        }
-
-        /* ── Rebuild midpoint markers after any vertex change ────── */
-        function rebuildMidpoints(latlngs) {
-            midptMarkers.forEach(m => map.removeLayer(m));
-            midptMarkers = [];
-
-            latlngs.forEach((ll, i) => {
-                const next     = latlngs[(i + 1) % latlngs.length];
-                const insertAt = i + 1;
-                const m = L.marker(midLatLng(ll, next), {
-                    icon: midptIcon, draggable: true, zIndexOffset: 1500
-                }).addTo(map);
-
-                /* Dragging a midpoint promotes it to a real vertex */
-                m.on('dragstart', function () {
-                    const cur = activeLayer.getLatLngs()[0].slice();
-                    cur.splice(insertAt, 0, m.getLatLng());
-                    activeLayer.setLatLngs([cur]);
-                    addPolygonHandles(activeLayer);
-                });
-
-                midptMarkers.push(m);
-            });
-        }
-
-        /* ── Polygon: vertex + midpoint handles ─────────────────── */
-        function addPolygonHandles(polygon) {
-            clearHandles();
-            activeLayer = polygon;
-
-            const latlngs = polygon.getLatLngs()[0];
-
-            latlngs.forEach((ll, index) => {
-                const m = L.marker(ll, {
-                    icon: vertexIcon, draggable: true, zIndexOffset: 2000
-                }).addTo(map);
-
-                m.on('drag', function (e) {
-                    const cur = activeLayer.getLatLngs()[0].slice();
-                    cur[index] = e.target.getLatLng();
-                    activeLayer.setLatLngs([cur]);
-                    updateCoordinates();
-                });
-
-                m.on('dragend', function () {
-                    rebuildMidpoints(activeLayer.getLatLngs()[0]);
-                });
-
-                vertexMarkers.push(m);
-            });
-
-            rebuildMidpoints(latlngs);
-        }
-
-        /* ── Circle: N / E / S / W resize handles ───────────────── */
-        const CIRCLE_ANGLES = [-Math.PI/2, 0, Math.PI/2, Math.PI]; // N E S W
-
-        function refreshCircleHandles() {
-            if (!(activeLayer instanceof L.Circle)) return;
-            const c = activeLayer.getLatLng(), r = activeLayer.getRadius();
-            CIRCLE_ANGLES.forEach((angle, i) =>
-                vertexMarkers[i].setLatLng(calculateDestinationPoint(c, angle, r))
-            );
-        }
-
-        function addCircleHandles(circle) {
-            clearHandles();
-            activeLayer = circle;
-            const c = circle.getLatLng(), r = circle.getRadius();
-
-            CIRCLE_ANGLES.forEach(angle => {
-                const m = L.marker(calculateDestinationPoint(c, angle, r), {
-                    icon: vertexIcon, draggable: true, zIndexOffset: 2000
-                }).addTo(map);
-
-                m.on('drag', function (e) {
-                    const newR = activeLayer.getLatLng().distanceTo(e.target.getLatLng());
-                    activeLayer.setRadius(newR);
-                    refreshCircleHandles();
-                    updateCoordinates();
-                });
-
-                vertexMarkers.push(m);
-            });
-        }
-
-        /* ── Init map ───────────────────────────────────────────── */
         function initMap() {
             map = L.map('map').setView([20.5937, 78.9629], 5);
 
@@ -263,39 +253,19 @@
                         showArea: true,
                         shapeOptions: { color: '#555', fillColor: '#555', fillOpacity: 0.4, weight: 2 }
                     },
-                    polyline:     false,
-                    rectangle:    false,
+                    polyline: false,
+                    rectangle: false,
                     circle: {
                         shapeOptions: { color: '#555', fillColor: '#555', fillOpacity: 0.4, weight: 2 },
                         showRadius: true
                     },
-                    marker:       false,
+                    marker: false,
                     circlemarker: false
                 }
             });
             map.addControl(drawControl);
 
-            /* Hide custom handles while Leaflet.draw edit toolbar is open */
-            map.on(L.Draw.Event.EDITSTART, function () {
-                [...vertexMarkers, ...midptMarkers].forEach(m => {
-                    m.setOpacity(0);
-                    if (m.dragging) m.dragging.disable();
-                });
-            });
-            map.on(L.Draw.Event.EDITSTOP, function () {
-                if (activeLayer instanceof L.Circle) {
-                    refreshCircleHandles();
-                } else if (activeLayer) {
-                    addPolygonHandles(activeLayer);
-                }
-                [...vertexMarkers, ...midptMarkers].forEach(m => {
-                    m.setOpacity(1);
-                    if (m.dragging) m.dragging.enable();
-                });
-                updateCoordinates();
-            });
-
-            /* Load saved coordinates on edit page */
+            // Load existing polygon when editing
             if (existingCoordinates && existingCoordinates.length > 0) {
                 try {
                     const latlngs = existingCoordinates.map(c => [c.lat, c.lng]);
@@ -304,7 +274,7 @@
                     });
                     drawnItems.addLayer(polygon);
                     map.fitBounds(polygon.getBounds());
-                    addPolygonHandles(polygon);
+                    refreshScaleHandles(polygon);
                     updateCoordinates();
                 } catch (e) {
                     console.error('Error loading existing coordinates:', e);
@@ -313,54 +283,79 @@
 
             map.on(L.Draw.Event.CREATED, function (e) {
                 drawnItems.clearLayers();
-                clearHandles();
-                const layer = e.layer;
+                clearScaleHandles();
+                let layer = e.layer;
+                let type = e.layerType;
+                
+                if (type === 'circle') {
+                    const center = layer.getLatLng();
+                    const radius = layer.getRadius();
+                    const pts = 32; // Use 32 points for a smooth circle, easily scalable with custom handles
+                    const latlngs = [];
+                    for (let i = 0; i < pts; i++) {
+                        const angle = (i / pts) * 2 * Math.PI;
+                        const point = calculateDestinationPoint(center, angle, radius);
+                        latlngs.push([point.lat, point.lng]);
+                    }
+                    layer = L.polygon(latlngs, {
+                        color: '#555', fillColor: '#555', fillOpacity: 0.4, weight: 2
+                    });
+                }
+                
                 drawnItems.addLayer(layer);
-                if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
-                    addCircleHandles(layer);
-                } else {
-                    addPolygonHandles(layer);
+                if (layer instanceof L.Polygon) {
+                    refreshScaleHandles(layer);
                 }
                 updateCoordinates();
             });
 
-            map.on(L.Draw.Event.EDITED,  function () { updateCoordinates(); });
+            map.on(L.Draw.Event.EDITSTART, function () {
+                // Hide custom handles during Leaflet edit mode
+                scaleHandles.forEach(m => { m.setOpacity(0); m.dragging.disable(); });
+            });
+            map.on(L.Draw.Event.EDITSTOP, function () {
+                // Restore custom handles
+                scaleHandles.forEach(m => { m.setOpacity(1); m.dragging.enable(); });
+                refreshScaleHandles(activePolygon);
+                updateCoordinates();
+            });
+
+            map.on(L.Draw.Event.EDITED, function () {
+                refreshScaleHandles(activePolygon);
+                updateCoordinates();
+            });
+
             map.on(L.Draw.Event.DELETED, function () {
-                clearHandles();
+                clearScaleHandles();
                 document.getElementById('coordinates').value = '[]';
             });
         }
 
-        /* ── Serialize drawn shape to hidden input ──────────────── */
         function updateCoordinates() {
             const layers = drawnItems.getLayers();
-            if (!layers.length) return;
-            const layer = layers[0];
-            let coordinates = [];
+            if (layers.length > 0) {
+                const layer = layers[0];
+                let coordinates = [];
 
-            if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
-                const c = layer.getLatLng(), r = layer.getRadius();
-                for (let i = 0; i < 64; i++) {
-                    const pt = calculateDestinationPoint(c, (i / 64) * 2 * Math.PI, r);
-                    coordinates.push({ lat: pt.lat, lng: pt.lng });
+                if (layer.getLatLngs) {
+                    const latlngs = layer.getLatLngs();
+                    const points = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+                    coordinates = points.map(latlng => ({ lat: latlng.lat, lng: latlng.lng }));
                 }
-            } else if (layer.getLatLngs) {
-                const latlngs = layer.getLatLngs();
-                const pts = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
-                coordinates = pts.map(ll => ({ lat: ll.lat, lng: ll.lng }));
-            }
 
-            document.getElementById('coordinates').value = JSON.stringify(coordinates);
+                document.getElementById('coordinates').value = JSON.stringify(coordinates);
+            }
         }
 
-        /* ── Boot ───────────────────────────────────────────────── */
         document.addEventListener('DOMContentLoaded', function () {
             initMap();
 
             document.getElementById('servicezone').addEventListener('submit', function (e) {
+                const coordInput = document.getElementById('coordinates');
+                const coords = coordInput.value;
                 try {
-                    const parsed = JSON.parse(document.getElementById('coordinates').value);
-                    if (!Array.isArray(parsed) || parsed.length < 3) {
+                    const parsedCoords = JSON.parse(coords);
+                    if (!Array.isArray(parsedCoords) || parsedCoords.length < 3) {
                         e.preventDefault();
                         showCoordinateError("{{ __('messages.please_draw_zone') }}");
                     } else {
@@ -372,13 +367,14 @@
                 }
             });
 
-            function showCoordinateError(msg) {
-                const el = document.querySelector('#coordinates ~ .help-block');
-                if (el) el.textContent = msg;
+            function showCoordinateError(message) {
+                const errorBlock = document.querySelector('#coordinates ~ .help-block');
+                if (errorBlock) errorBlock.textContent = message;
             }
+
             function clearCoordinateError() {
-                const el = document.querySelector('#coordinates ~ .help-block');
-                if (el) el.textContent = '';
+                const errorBlock = document.querySelector('#coordinates ~ .help-block');
+                if (errorBlock) errorBlock.textContent = '';
             }
         });
     </script>
