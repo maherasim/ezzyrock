@@ -94,42 +94,11 @@
     <!-- Leaflet Draw JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
-    <style>
-        .circle-resize-handle {
-            width: 14px !important;
-            height: 14px !important;
-            background: white;
-            border: 2px solid #333;
-            border-radius: 50%;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
-            cursor: move;
-            margin-left: -7px !important;
-            margin-top: -7px !important;
-        }
-    </style>
 
     <script>
         let map;
         let drawnItems;
         let existingCoordinates = {!! isset($servicezone->coordinates) ? json_encode($servicezone->coordinates) : 'null' !!};
-
-        // Circle resize handle state
-        let activeCircle = null;
-        let circleHandles = [];
-
-        const handleIcon = L.divIcon({
-            className: 'circle-resize-handle',
-            iconSize: [14, 14],
-            iconAnchor: [7, 7]
-        });
-
-        // Angles for N, E, S, W handles
-        const HANDLE_ANGLES = [
-            -Math.PI / 2, // North (up)
-            0,            // East (right)
-            Math.PI / 2,  // South (down)
-            Math.PI       // West (left)
-        ];
 
         function calculateDestinationPoint(center, angle, radius) {
             const R = 6371000;
@@ -142,41 +111,6 @@
             return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
         }
 
-        function clearCircleHandles() {
-            circleHandles.forEach(m => map.removeLayer(m));
-            circleHandles = [];
-            activeCircle = null;
-        }
-
-        function refreshHandlePositions() {
-            if (!activeCircle || circleHandles.length === 0) return;
-            const center = activeCircle.getLatLng();
-            const radius = activeCircle.getRadius();
-            HANDLE_ANGLES.forEach((angle, i) => {
-                circleHandles[i].setLatLng(calculateDestinationPoint(center, angle, radius));
-            });
-        }
-
-        function addCircleHandles(circle) {
-            clearCircleHandles();
-            activeCircle = circle;
-            const center = circle.getLatLng();
-            const radius = circle.getRadius();
-
-            HANDLE_ANGLES.forEach(angle => {
-                const pos = calculateDestinationPoint(center, angle, radius);
-                const marker = L.marker(pos, { icon: handleIcon, draggable: true, zIndexOffset: 2000 }).addTo(map);
-
-                marker.on('drag', function (e) {
-                    const newRadius = activeCircle.getLatLng().distanceTo(e.target.getLatLng());
-                    activeCircle.setRadius(newRadius);
-                    refreshHandlePositions();
-                    updateCoordinates();
-                });
-
-                circleHandles.push(marker);
-            });
-        }
 
         function initMap() {
             map = L.map('map').setView([20.5937, 78.9629], 5);
@@ -213,19 +147,6 @@
             });
             map.addControl(drawControl);
 
-            // Hide custom handles while Leaflet.draw edit mode is active
-            map.on(L.Draw.Event.EDITSTART, function () {
-                circleHandles.forEach(m => m.setOpacity(0).dragging.disable());
-            });
-            map.on(L.Draw.Event.EDITSTOP, function () {
-                // Refresh positions in case circle was moved in edit mode
-                if (activeCircle) {
-                    refreshHandlePositions();
-                    circleHandles.forEach(m => { m.setOpacity(1); m.dragging.enable(); });
-                }
-                updateCoordinates();
-            });
-
             // Load existing polygon when editing
             if (existingCoordinates && existingCoordinates.length > 0) {
                 try {
@@ -243,12 +164,24 @@
 
             map.on(L.Draw.Event.CREATED, function (e) {
                 drawnItems.clearLayers();
-                clearCircleHandles();
-                const layer = e.layer;
-                drawnItems.addLayer(layer);
+                let layer = e.layer;
+                
                 if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
-                    addCircleHandles(layer);
+                    const center = layer.getLatLng();
+                    const radius = layer.getRadius();
+                    const pts = 8; // Use 8 points to make it an editable octagon that resembles a circle but can be easily stretched
+                    const latlngs = [];
+                    for (let i = 0; i < pts; i++) {
+                        const angle = (i / pts) * 2 * Math.PI;
+                        const point = calculateDestinationPoint(center, angle, radius);
+                        latlngs.push([point.lat, point.lng]);
+                    }
+                    layer = L.polygon(latlngs, {
+                        color: '#555', fillColor: '#555', fillOpacity: 0.4, weight: 2
+                    });
                 }
+                
+                drawnItems.addLayer(layer);
                 updateCoordinates();
             });
 
@@ -257,7 +190,6 @@
             });
 
             map.on(L.Draw.Event.DELETED, function () {
-                clearCircleHandles();
                 document.getElementById('coordinates').value = '[]';
             });
         }
@@ -268,16 +200,7 @@
                 const layer = layers[0];
                 let coordinates = [];
 
-                if (layer instanceof L.Circle && !(layer instanceof L.CircleMarker)) {
-                    const center = layer.getLatLng();
-                    const radius = layer.getRadius();
-                    const pts = 64;
-                    for (let i = 0; i < pts; i++) {
-                        const angle = (i / pts) * 2 * Math.PI;
-                        const point = calculateDestinationPoint(center, angle, radius);
-                        coordinates.push({ lat: point.lat, lng: point.lng });
-                    }
-                } else if (layer.getLatLngs) {
+                if (layer.getLatLngs) {
                     const latlngs = layer.getLatLngs();
                     const points = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
                     coordinates = points.map(latlng => ({ lat: latlng.lat, lng: latlng.lng }));
